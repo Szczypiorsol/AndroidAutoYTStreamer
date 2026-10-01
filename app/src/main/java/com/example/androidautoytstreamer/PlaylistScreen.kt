@@ -34,7 +34,8 @@ fun PlaylistScreen(
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
     onGoogleSignIn: () -> Unit = {},
-    onGoogleSignOut: () -> Unit = {}
+    onGoogleSignOut: () -> Unit = {},
+    onQueueLoaded: (List<PlaylistVideo>) -> Unit = {}
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -121,6 +122,7 @@ fun PlaylistScreen(
                                     if (items.isNotEmpty()) {
                                         loadedQueue = items
                                         viewModel.loadPlaylist(items)
+                                        onQueueLoaded(items)
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth()

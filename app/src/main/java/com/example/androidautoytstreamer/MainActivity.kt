@@ -72,8 +72,8 @@ class MainActivity : ComponentActivity() {
                         isSignedIn = isSignedIn.value,
                         onPlay = { playbackService?.resume() ?: mediaSessionController?.play() },
                         onPause = { playbackService?.pause() ?: mediaSessionController?.pause() },
-                        onNext = { playbackService?.playVideo("next") ?: mediaSessionController?.next() },
-                        onPrevious = { playbackService?.playVideo("previous") ?: mediaSessionController?.previous() },
+                        onNext = { playbackService?.next() ?: mediaSessionController?.next() },
+                        onPrevious = { playbackService?.previous() ?: mediaSessionController?.previous() },
                         onGoogleSignIn = {
                             val signInIntent = authManager.signInIntent()
                             signInLauncher.launch(signInIntent)
@@ -82,6 +82,9 @@ class MainActivity : ComponentActivity() {
                             authManager.signOut {
                                 isSignedIn.value = false
                             }
+                        },
+                        onQueueLoaded = { queue ->
+                            playbackService?.setQueue(queue)
                         }
                     )
                 }
