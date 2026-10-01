@@ -50,11 +50,13 @@ Jeżeli klucz nie zostanie ustawiony, aplikacja użyje bezpiecznego trybu fallba
 ## Status repo
 
 - dokumentacja startowa została zapisana,
-- wstępny szkic kolejki i sterowania jest już zaimplementowany,
-- pojawił się mechanizm parsowania linków playlist YouTube,
-- dodano konfigurację `YOUTUBE_API_KEY` z fallbackiem,
-- projekt jest gotowy do dalszego rozwoju w kierunku Android Auto i realnej integracji z YouTube.
+- działa lokalna kolejka z historią i wznowieniem,
+- działa wybór prywatnych playlist po Google Sign-In,
+- działa `MediaSession` i `MediaLibraryService` pod Android Auto,
+- browse tree Android Auto jest spięte z realną kolejką i odświeżane po zmianach,
+- dodano cold-start fallback kolejki z TTL (24h),
+- dodano konfigurację `YOUTUBE_API_KEY` z fallbackiem demo dla środowiska bez klucza.
 
 ## Stan obecny
 
-Projekt jest na etapie MVP z działającym szkieletem aplikacji, lokalną kolejką, historią oglądania oraz podstawowym sterowaniem w trybie samochodowym. To wystarcza jako punkt startowy do dalszego rozwoju i testów w środowisku Android Auto.
+Projekt jest na etapie rozbudowanego MVP: ma działającą lokalną kolejkę, trwałą historię postępu, sterowanie play/pause/next/previous, obsługę prywatnych playlist oraz endpoint Android Auto (`MediaLibraryService`) z live browse tree i fallbackiem po cold starcie.

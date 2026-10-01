@@ -45,8 +45,8 @@ Stworzyć aplikację Android do bezpiecznego sterowania odtwarzaniem długich pl
 - [x] Google Sign-In w aplikacji,
 - [x] autoryzacja do YouTube Data API,
 - [x] pobieranie listy prywatnych playlist użytkownika,
-- [ ] wybór playlisty z poziomu aplikacji,
-- [ ] obsługa błędów autoryzacji.
+- [x] wybór playlisty z poziomu aplikacji,
+- [x] podstawowa obsługa błędów autoryzacji i ładowania.
 
 ### Etap 1 - fundament
 - [x] ekran startowy w aplikacji,
@@ -58,7 +58,10 @@ Stworzyć aplikację Android do bezpiecznego sterowania odtwarzaniem długich pl
 - [x] integracja z ekranem samochodu,
 - [x] sterowanie play/pause/next/previous,
 - [x] widok odtwarzania zoptymalizowany pod samochód,
-- [x] endpoint `MediaLibraryService` dla browse tree Android Auto.
+- [x] endpoint `MediaLibraryService` dla browse tree Android Auto,
+- [x] live queue w browse tree (podpięta pod realną kolejkę),
+- [x] odświeżanie browse tree po zmianach kolejki z debounce,
+- [x] fallback cold-start z lokalnego cache kolejki (TTL 24h).
 
 ### Etap 3 - kolejka i historia
 - [x] odtwarzanie po kolei,
@@ -83,15 +86,13 @@ Stworzyć aplikację Android do bezpiecznego sterowania odtwarzaniem długich pl
 
 1. [x] Najpierw zbudować stabilny MVP z lokalną kolejką i historią oglądania.
 2. [x] Następnie dodać logowanie Google i pobieranie prywatnych playlist użytkownika.
-3. [ ] Potem wpiąć Android Auto i sterowanie z ekranu samochodu.
 3. [x] Potem wpiąć Android Auto i sterowanie z ekranu samochodu.
 4. [ ] Na końcu dopracować UX, automatyczne wznowienie i pamięć postępu.
 
 ## Następny krok
 
 Jeśli projekt będzie kontynuowany, kolejnym krokiem powinno być:
-1. [x] doprecyzowanie architektury,
-2. [x] wybór sposobu pobierania danych z YouTube,
-3. [x] przygotowanie logowania Google dla prywatnych playlist,
-4. [x] przygotowanie szkieletu `MediaSession` i obsługi Android Auto,
-5. [x] dodanie lokalnej historii oglądania.
+1. [ ] dopracowanie UX Android Auto pod minimalną liczbę interakcji,
+2. [ ] automatyczne wznowienie po połączeniu z autem,
+3. [ ] rozszerzenie testów edge-case dla integracji playback + browse tree,
+4. [ ] przygotowanie checklisty testów na realnym urządzeniu i w Android Auto.
