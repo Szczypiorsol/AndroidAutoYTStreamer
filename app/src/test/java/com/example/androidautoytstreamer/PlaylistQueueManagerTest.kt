@@ -48,4 +48,23 @@ class PlaylistQueueManagerTest {
         assertEquals(WatchStatus.IN_PROGRESS, snapshot.first().status)
         assertEquals(42, snapshot.first().resumeAtSeconds)
     }
+
+    @Test
+    fun `reload keeps paused progress from history store`() {
+        val queueManager = PlaylistQueueManager()
+        val videos = listOf(
+            PlaylistVideo("x", "Video X", status = WatchStatus.NOT_STARTED),
+            PlaylistVideo("y", "Video Y", status = WatchStatus.NOT_STARTED)
+        )
+
+        queueManager.setQueue(videos)
+        queueManager.markPaused("x", 55)
+
+        queueManager.setQueue(videos)
+
+        val reloadedCurrent = queueManager.current()
+        assertEquals("x", reloadedCurrent?.id)
+        assertEquals(55, reloadedCurrent?.resumeAtSeconds)
+        assertEquals(WatchStatus.IN_PROGRESS, reloadedCurrent?.status)
+    }
 }

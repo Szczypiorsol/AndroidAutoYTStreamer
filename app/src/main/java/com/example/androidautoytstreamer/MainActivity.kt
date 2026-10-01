@@ -15,10 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.androidautoytstreamer.ui.theme.AndroidAutoYTStreamerTheme
@@ -31,17 +28,26 @@ class MainActivity : ComponentActivity() {
     private lateinit var authManager: GoogleAuthManager
     private lateinit var signInLauncher: ActivityResultLauncher<Intent>
     private val isSignedInState = mutableStateOf(false)
+    private val playbackSnapshotState = mutableStateOf(PlaybackSnapshot())
+
+    private val playbackStateListener = PlaybackStateListener { snapshot ->
+        playbackSnapshotState.value = snapshot
+    }
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             val binder = service as PlaybackService.LocalBinder
             playbackService = binder.getService()
+            playbackService?.addPlaybackStateListener(playbackStateListener)
+            playbackSnapshotState.value = playbackService?.currentPlaybackSnapshot() ?: PlaybackSnapshot()
             mediaSessionController = MediaSessionController(this@MainActivity)
         }
 
         override fun onServiceDisconnected(className: ComponentName) {
+            playbackService?.removePlaybackStateListener(playbackStateListener)
             playbackService = null
             mediaSessionController = null
+            playbackSnapshotState.value = PlaybackSnapshot()
         }
     }
 
@@ -88,7 +94,8 @@ class MainActivity : ComponentActivity() {
                         },
                         onQueueLoaded = { queue ->
                             playbackService?.setQueue(queue)
-                        }
+                        },
+                        playbackSnapshot = playbackSnapshotState.value
                     )
                 }
             }
@@ -96,6 +103,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        playbackService?.removePlaybackStateListener(playbackStateListener)
         super.onDestroy()
         unbindService(serviceConnection)
     }

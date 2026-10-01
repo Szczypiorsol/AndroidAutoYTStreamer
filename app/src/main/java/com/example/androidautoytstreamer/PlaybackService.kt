@@ -8,6 +8,17 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
+import java.util.concurrent.CopyOnWriteArraySet
+
+data class PlaybackSnapshot(
+    val currentVideo: PlaylistVideo? = null,
+    val isPlaying: Boolean = false,
+    val positionSeconds: Int = 0
+)
+
+fun interface PlaybackStateListener {
+    fun onPlaybackStateChanged(snapshot: PlaybackSnapshot)
+}
 
 class PlaybackService : Service() {
     private val binder = LocalBinder()
@@ -16,6 +27,7 @@ class PlaybackService : Service() {
     private val queue = mutableListOf<PlaylistVideo>()
     private var currentQueueIndex = -1
     private var lastKnownQueueIndex = -1
+    private val playbackListeners = CopyOnWriteArraySet<PlaybackStateListener>()
 
     private val playerListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -43,6 +55,7 @@ class PlaybackService : Service() {
             }
 
             lastKnownQueueIndex = currentQueueIndex
+            notifyPlaybackState()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -51,6 +64,7 @@ class PlaybackService : Service() {
             } else {
                 saveCurrentProgress()
             }
+            notifyPlaybackState()
         }
     }
 
@@ -88,6 +102,7 @@ class PlaybackService : Service() {
         if (queue.isEmpty()) {
             player?.clearMediaItems()
             currentQueueIndex = -1
+            notifyPlaybackState()
             return
         }
 
@@ -112,6 +127,7 @@ class PlaybackService : Service() {
         player?.playWhenReady = true
         player?.play()
         markCurrentStarted()
+        notifyPlaybackState()
     }
 
     fun playCurrent() {
@@ -122,11 +138,13 @@ class PlaybackService : Service() {
     fun pause() {
         saveCurrentProgress()
         player?.pause()
+        notifyPlaybackState()
     }
 
     fun resume() {
         if (player?.mediaItemCount == 0) return
         player?.play()
+        notifyPlaybackState()
     }
 
     fun next(): PlaylistVideo? {
@@ -138,6 +156,7 @@ class PlaybackService : Service() {
         player?.seekToDefaultPosition(nextIndex)
         player?.play()
         markCurrentStarted()
+        notifyPlaybackState()
         return queue[nextIndex]
     }
 
@@ -150,11 +169,30 @@ class PlaybackService : Service() {
         player?.seekToDefaultPosition(previousIndex)
         player?.play()
         markCurrentStarted()
+        notifyPlaybackState()
         return queue[previousIndex]
     }
 
     fun currentVideo(): PlaylistVideo? {
         return if (currentQueueIndex in queue.indices) queue[currentQueueIndex] else null
+    }
+
+    fun addPlaybackStateListener(listener: PlaybackStateListener) {
+        playbackListeners.add(listener)
+        listener.onPlaybackStateChanged(currentPlaybackSnapshot())
+    }
+
+    fun removePlaybackStateListener(listener: PlaybackStateListener) {
+        playbackListeners.remove(listener)
+    }
+
+    fun currentPlaybackSnapshot(): PlaybackSnapshot {
+        val localPlayer = player
+        return PlaybackSnapshot(
+            currentVideo = currentVideo(),
+            isPlaying = localPlayer?.isPlaying == true,
+            positionSeconds = ((localPlayer?.currentPosition ?: 0L) / 1000L).toInt().coerceAtLeast(0)
+        )
     }
 
     fun markCurrentStarted() {
@@ -179,12 +217,21 @@ class PlaybackService : Service() {
             status = WatchStatus.IN_PROGRESS,
             resumeAtSeconds = resumeSeconds
         )
+        notifyPlaybackState()
     }
 
     private fun markCompletedAt(index: Int) {
         if (index !in queue.indices) return
         val current = queue[index]
         queue[index] = current.copy(status = WatchStatus.COMPLETED, resumeAtSeconds = 0)
+        notifyPlaybackState()
+    }
+
+    private fun notifyPlaybackState() {
+        val snapshot = currentPlaybackSnapshot()
+        playbackListeners.forEach { listener ->
+            listener.onPlaybackStateChanged(snapshot)
+        }
     }
 
     private fun findNextPlayableIndex(fromIndex: Int): Int? {

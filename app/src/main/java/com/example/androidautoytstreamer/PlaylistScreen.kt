@@ -41,7 +41,8 @@ fun PlaylistScreen(
     onPrevious: () -> Unit = {},
     onGoogleSignIn: () -> Unit = {},
     onGoogleSignOut: () -> Unit = {},
-    onQueueLoaded: (List<PlaylistVideo>) -> Unit = {}
+    onQueueLoaded: (List<PlaylistVideo>) -> Unit = {},
+    playbackSnapshot: PlaybackSnapshot = PlaybackSnapshot()
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -50,7 +51,6 @@ fun PlaylistScreen(
 
     val viewModel = remember { PlaylistViewModel() }
     var playlistInput by remember { mutableStateOf("PL8A5A9D5E0AF1D4F4") }
-    var isPlaying by remember { mutableStateOf(false) }
     var privatePlaylists by remember { mutableStateOf<List<PlaylistSummary>>(emptyList()) }
     var selectedPlaylistId by remember { mutableStateOf<String?>(null) }
     var playlistError by remember { mutableStateOf<String?>(null) }
@@ -181,7 +181,7 @@ fun PlaylistScreen(
         }
 
         Text(
-            text = if (isPlaying) "Playback: playing" else "Playback: paused",
+            text = if (playbackSnapshot.isPlaying) "Playback: playing" else "Playback: paused",
             style = MaterialTheme.typography.titleMedium
         )
 
@@ -192,7 +192,6 @@ fun PlaylistScreen(
             Button(
                 onClick = {
                     onPlay()
-                    isPlaying = true
                     val currentVideo = viewModel.currentVideo()
                     if (currentVideo != null) {
                         viewModel.markStarted(currentVideo.id)
@@ -209,10 +208,9 @@ fun PlaylistScreen(
             Button(
                 onClick = {
                     onPause()
-                    isPlaying = false
                     val currentVideo = viewModel.currentVideo()
                     if (currentVideo != null) {
-                        viewModel.markPaused(currentVideo.id, currentVideo.resumeAtSeconds)
+                        viewModel.markPaused(currentVideo.id, playbackSnapshot.positionSeconds)
                         loadedQueue = viewModel.snapshot()
                     }
                 },
@@ -281,14 +279,14 @@ fun PlaylistScreen(
             Text("Load playlist")
         }
 
-        val current = viewModel.currentVideo()
+        val current = playbackSnapshot.currentVideo ?: viewModel.currentVideo()
         if (current != null) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(text = "Current")
                     Text(text = current.title)
                     Text(text = "Status: ${current.status.name}")
-                    Text(text = "Resume: ${current.resumeAtSeconds}s")
+                    Text(text = "Resume: ${playbackSnapshot.positionSeconds}s")
                 }
             }
         }
