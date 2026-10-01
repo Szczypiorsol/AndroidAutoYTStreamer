@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,6 +33,7 @@ fun PlaylistScreen(
 ) {
     val viewModel = remember { PlaylistViewModel() }
     var playlistInput by remember { mutableStateOf("PL8A5A9D5E0AF1D4F4") }
+    var isPlaying by remember { mutableStateOf(false) }
     var loadedQueue by remember {
         mutableStateOf(
             listOf(
@@ -56,6 +58,11 @@ fun PlaylistScreen(
             style = MaterialTheme.typography.headlineMedium
         )
 
+        Text(
+            text = if (isPlaying) "Playback: playing" else "Playback: paused",
+            style = MaterialTheme.typography.titleMedium
+        )
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxWidth()
@@ -63,13 +70,16 @@ fun PlaylistScreen(
             Button(
                 onClick = {
                     onPlay()
+                    isPlaying = true
                     val currentVideo = viewModel.currentVideo()
                     if (currentVideo != null) {
                         viewModel.markStarted(currentVideo.id)
                         loadedQueue = viewModel.snapshot()
                     }
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(72.dp),
                 colors = ButtonDefaults.buttonColors()
             ) {
                 Text("Play")
@@ -77,13 +87,16 @@ fun PlaylistScreen(
             Button(
                 onClick = {
                     onPause()
+                    isPlaying = false
                     val currentVideo = viewModel.currentVideo()
                     if (currentVideo != null) {
                         viewModel.markPaused(currentVideo.id, currentVideo.resumeAtSeconds)
                         loadedQueue = viewModel.snapshot()
                     }
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .height(72.dp)
             ) {
                 Text("Pause")
             }
@@ -99,7 +112,9 @@ fun PlaylistScreen(
                     viewModel.previousVideo()
                     loadedQueue = viewModel.snapshot()
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .height(72.dp)
             ) {
                 Text("Prev")
             }
@@ -109,7 +124,9 @@ fun PlaylistScreen(
                     viewModel.nextVideo()
                     loadedQueue = viewModel.snapshot()
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .height(72.dp)
             ) {
                 Text("Next")
             }
