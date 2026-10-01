@@ -36,7 +36,7 @@ class YouTubePlaylistRepository {
         return null
     }
 
-    fun loadPlaylistFromUrl(rawInput: String, apiKey: String? = null): Result<List<PlaylistVideo>> {
+    fun loadPlaylistFromUrl(rawInput: String, apiKey: String? = BuildConfig.YOUTUBE_API_KEY.takeIf { it.isNotBlank() }): Result<List<PlaylistVideo>> {
         val playlistId = parsePlaylistId(rawInput)
             ?: return Result.failure(IllegalArgumentException("Invalid YouTube playlist URL or ID"))
 
@@ -55,7 +55,7 @@ class YouTubePlaylistRepository {
     private fun fetchPlaylistFromApi(playlistId: String, apiKey: String): List<PlaylistVideo> {
         val url = buildString {
             append(YOUTUBE_API_URL)
-            append("?part=snippet,status")
+            append("?part=snippet")
             append("&playlistId=")
             append(playlistId)
             append("&maxResults=50")
@@ -84,7 +84,7 @@ class YouTubePlaylistRepository {
             val snippet = item.optJSONObject("snippet") ?: continue
             val resourceId = snippet.optJSONObject("resourceId")?.optString("videoId") ?: continue
             val title = snippet.optString("title", "Untitled video")
-            val duration = snippet.optJSONObject("thumbnails")?.optJSONObject("default")?.optInt("height", 180) ?: 180
+            val duration = snippet.optInt("duration", 180)
             videos.add(
                 PlaylistVideo(
                     id = resourceId,

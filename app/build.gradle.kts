@@ -3,6 +3,17 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val localPropertiesFile = rootProject.file("local.properties")
+val youtubeApiKey = if (localPropertiesFile.exists()) {
+    localPropertiesFile.readLines()
+        .firstOrNull { it.startsWith("YOUTUBE_API_KEY=") }
+        ?.substringAfter("=")
+        ?.trim()
+        ?: ""
+} else {
+    ""
+}
+
 android {
     namespace = "com.example.androidautoytstreamer"
     compileSdk {
@@ -18,6 +29,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        buildConfigField("String", "YOUTUBE_API_KEY", "\"${youtubeApiKey}\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -36,6 +48,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
