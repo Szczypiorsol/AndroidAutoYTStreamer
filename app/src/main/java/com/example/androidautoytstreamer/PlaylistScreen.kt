@@ -13,17 +13,23 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun PlaylistScreen(
@@ -47,6 +53,9 @@ fun PlaylistScreen(
     var isPlaying by remember { mutableStateOf(false) }
     var privatePlaylists by remember { mutableStateOf<List<PlaylistSummary>>(emptyList()) }
     var selectedPlaylistId by remember { mutableStateOf<String?>(null) }
+    var playlistError by remember { mutableStateOf<String?>(null) }
+    var isLoadingPlaylists by remember { mutableStateOf(false) }
+    var isLoadingPlaylistItems by remember { mutableStateOf(false) }
     var loadedQueue by remember {
         mutableStateOf(
             listOf(
@@ -57,8 +66,11 @@ fun PlaylistScreen(
             )
         )
     }
+    val scope = rememberCoroutineScope()
 
-    viewModel.loadPlaylist(loadedQueue)
+    LaunchedEffect(loadedQueue) {
+        viewModel.loadPlaylist(loadedQueue)
+    }
 
     Column(
         modifier = modifier
@@ -101,12 +113,35 @@ fun PlaylistScreen(
         if (isSignedIn && playlistRepository != null) {
             Button(
                 onClick = {
-                    privatePlaylists = playlistRepository.loadPlaylists().getOrElse { emptyList() }
+                    scope.launch {
+                        isLoadingPlaylists = true
+                        playlistError = null
+                        val result = withContext(Dispatchers.IO) {
+                            playlistRepository.loadPlaylists()
+                        }
+                        privatePlaylists = result.getOrElse {
+                            playlistError = it.message ?: "Unable to load playlists"
+                            emptyList()
+                        }
+                        isLoadingPlaylists = false
+                    }
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Load my playlists")
             }
+        }
+
+        if (isLoadingPlaylists || isLoadingPlaylistItems) {
+            CircularProgressIndicator()
+        }
+
+        if (playlistError != null) {
+            Text(
+                text = playlistError ?: "",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error
+            )
         }
 
         if (privatePlaylists.isNotEmpty()) {
@@ -117,12 +152,22 @@ fun PlaylistScreen(
                         privatePlaylists.forEach { playlist ->
                             Button(
                                 onClick = {
-                                    selectedPlaylistId = playlist.id
-                                    val items = playlistRepository?.loadPlaylistItems(playlist.id)?.getOrElse { emptyList() } ?: emptyList()
-                                    if (items.isNotEmpty()) {
-                                        loadedQueue = items
-                                        viewModel.loadPlaylist(items)
-                                        onQueueLoaded(items)
+                                    scope.launch {
+                                        selectedPlaylistId = playlist.id
+                                        isLoadingPlaylistItems = true
+                                        playlistError = null
+                                        val items = withContext(Dispatchers.IO) {
+                                            playlistRepository?.loadPlaylistItems(playlist.id)
+                                        }?.getOrElse {
+                                            playlistError = it.message ?: "Unable to load playlist items"
+                                            emptyList()
+                                        } ?: emptyList()
+
+                                        if (items.isNotEmpty()) {
+                                            loadedQueue = items
+                                            onQueueLoaded(items)
+                                        }
+                                        isLoadingPlaylistItems = false
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth()
@@ -218,8 +263,18 @@ fun PlaylistScreen(
 
         Button(
             onClick = {
-                val result = viewModel.loadFromPlaylistInput(playlistInput)
-                result.getOrNull()?.let { loadedQueue = it }
+                scope.launch {
+                    playlistError = null
+                    val result = withContext(Dispatchers.IO) {
+                        viewModel.loadFromPlaylistInput(playlistInput)
+                    }
+                    result.getOrNull()?.let {
+                        loadedQueue = it
+                        onQueueLoaded(it)
+                    } ?: run {
+                        playlistError = result.exceptionOrNull()?.message ?: "Unable to load playlist"
+                    }
+                }
             },
             modifier = Modifier.fillMaxWidth()
         ) {

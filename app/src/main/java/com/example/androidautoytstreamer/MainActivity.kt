@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
     private var mediaSessionController: MediaSessionController? = null
     private lateinit var authManager: GoogleAuthManager
     private lateinit var signInLauncher: ActivityResultLauncher<Intent>
+    private val isSignedInState = mutableStateOf(false)
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
@@ -48,14 +49,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         authManager = GoogleAuthManager(this)
+        isSignedInState.value = authManager.getCurrentAccount() != null
         signInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
             try {
                 val account = task.getResult(ApiException::class.java)
                 if (account != null) {
+                    isSignedInState.value = true
                     println("Google account: ${account.email}")
                 }
             } catch (_: ApiException) {
+                isSignedInState.value = false
                 println("Google sign-in failed")
             }
         }
@@ -66,10 +70,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             AndroidAutoYTStreamerTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    val isSignedIn = remember { mutableStateOf(authManager.getCurrentAccount() != null) }
                     PlaylistScreen(
                         modifier = Modifier.padding(innerPadding),
-                        isSignedIn = isSignedIn.value,
+                        isSignedIn = isSignedInState.value,
                         onPlay = { playbackService?.resume() ?: mediaSessionController?.play() },
                         onPause = { playbackService?.pause() ?: mediaSessionController?.pause() },
                         onNext = { playbackService?.next() ?: mediaSessionController?.next() },
@@ -80,7 +83,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onGoogleSignOut = {
                             authManager.signOut {
-                                isSignedIn.value = false
+                                isSignedInState.value = false
                             }
                         },
                         onQueueLoaded = { queue ->
