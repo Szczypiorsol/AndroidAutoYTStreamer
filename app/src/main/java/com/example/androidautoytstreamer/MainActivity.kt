@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        PlaylistHistoryStore.initialize(filesDir)
         authManager = GoogleAuthManager(this)
         isSignedInState.value = authManager.getCurrentAccount() != null
         signInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->

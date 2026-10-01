@@ -75,6 +75,7 @@ class PlaybackService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        PlaylistHistoryStore.initialize(filesDir)
         player = ExoPlayer.Builder(this).build()
         player?.addListener(playerListener)
         mediaSession = MediaSession.Builder(this, player!!).build()
