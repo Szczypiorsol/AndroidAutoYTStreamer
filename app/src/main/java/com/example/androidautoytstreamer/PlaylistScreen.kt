@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -22,7 +23,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun PlaylistScreen(modifier: Modifier = Modifier) {
+fun PlaylistScreen(
+    modifier: Modifier = Modifier,
+    onPlay: () -> Unit = {},
+    onPause: () -> Unit = {},
+    onNext: () -> Unit = {},
+    onPrevious: () -> Unit = {}
+) {
     val viewModel = remember { PlaylistViewModel() }
     var playlistInput by remember { mutableStateOf("PL8A5A9D5E0AF1D4F4") }
     var loadedQueue by remember {
@@ -45,9 +52,68 @@ fun PlaylistScreen(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = "Playlist queue",
+            text = "Car mode playlist",
             style = MaterialTheme.typography.headlineMedium
         )
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Button(
+                onClick = {
+                    onPlay()
+                    val currentVideo = viewModel.currentVideo()
+                    if (currentVideo != null) {
+                        viewModel.markStarted(currentVideo.id)
+                        loadedQueue = viewModel.snapshot()
+                    }
+                },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors()
+            ) {
+                Text("Play")
+            }
+            Button(
+                onClick = {
+                    onPause()
+                    val currentVideo = viewModel.currentVideo()
+                    if (currentVideo != null) {
+                        viewModel.markPaused(currentVideo.id, currentVideo.resumeAtSeconds)
+                        loadedQueue = viewModel.snapshot()
+                    }
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Pause")
+            }
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Button(
+                onClick = {
+                    onPrevious()
+                    viewModel.previousVideo()
+                    loadedQueue = viewModel.snapshot()
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Prev")
+            }
+            Button(
+                onClick = {
+                    onNext()
+                    viewModel.nextVideo()
+                    loadedQueue = viewModel.snapshot()
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Next")
+            }
+        }
 
         OutlinedTextField(
             value = playlistInput,
@@ -75,33 +141,6 @@ fun PlaylistScreen(modifier: Modifier = Modifier) {
                     Text(text = "Status: ${current.status.name}")
                     Text(text = "Resume: ${current.resumeAtSeconds}s")
                 }
-            }
-        }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Button(onClick = {
-                viewModel.nextVideo()
-                loadedQueue = viewModel.snapshot()
-            }) {
-                Text("Next")
-            }
-            Button(onClick = {
-                viewModel.previousVideo()
-                loadedQueue = viewModel.snapshot()
-            }) {
-                Text("Previous")
-            }
-            Button(onClick = {
-                val currentVideo = viewModel.currentVideo()
-                if (currentVideo != null) {
-                    viewModel.markCompleted(currentVideo.id)
-                    loadedQueue = viewModel.snapshot()
-                }
-            }) {
-                Text("Done")
             }
         }
 
