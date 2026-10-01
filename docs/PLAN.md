@@ -24,8 +24,8 @@ Stworzyć aplikację Android do bezpiecznego sterowania odtwarzaniem długich pl
 ### Konta Google i prywatne playlisty
 - [x] jeśli playlista ma być prywatna, konieczne jest zalogowanie użytkownika do Google / YouTube w aplikacji,
 - [x] aplikacja pobiera listę playlist użytkownika przez YouTube Data API,
-- [ ] po zalogowaniu użytkownik może wybrać swoje playlisty w aplikacji,
-- [ ] dane z prywatnych playlist są przechowywane lokalnie i wykorzystywane w kolejce odtwarzania.
+- [x] po zalogowaniu użytkownik może wybrać swoje playlisty w aplikacji,
+- [x] dane z prywatnych playlist są przechowywane lokalnie i wykorzystywane w kolejce odtwarzania.
 
 ### Historia i postęp
 - [x] każdy film może mieć status: `nieobejrzany`, `w trakcie`, `obejrzany`,
@@ -57,7 +57,8 @@ Stworzyć aplikację Android do bezpiecznego sterowania odtwarzaniem długich pl
 ### Etap 2 - Android Auto
 - [x] integracja z ekranem samochodu,
 - [x] sterowanie play/pause/next/previous,
-- [x] widok odtwarzania zoptymalizowany pod samochód.
+- [x] widok odtwarzania zoptymalizowany pod samochód,
+- [x] endpoint `MediaLibraryService` dla browse tree Android Auto.
 
 ### Etap 3 - kolejka i historia
 - [x] odtwarzanie po kolei,
@@ -68,7 +69,7 @@ Stworzyć aplikację Android do bezpiecznego sterowania odtwarzaniem długich pl
 ### Etap 4 - wygoda
 - [ ] ulubione playlisty,
 - [ ] automatyczne wznowienie po połączeniu z autem,
-- [ ] zapamiętywanie ostatniego punktu odtwarzania,
+- [x] zapamiętywanie ostatniego punktu odtwarzania,
 - [ ] dopracowanie UX pod jazdę.
 
 ## Ograniczenia i ryzyka
@@ -83,6 +84,7 @@ Stworzyć aplikację Android do bezpiecznego sterowania odtwarzaniem długich pl
 1. [x] Najpierw zbudować stabilny MVP z lokalną kolejką i historią oglądania.
 2. [x] Następnie dodać logowanie Google i pobieranie prywatnych playlist użytkownika.
 3. [ ] Potem wpiąć Android Auto i sterowanie z ekranu samochodu.
+3. [x] Potem wpiąć Android Auto i sterowanie z ekranu samochodu.
 4. [ ] Na końcu dopracować UX, automatyczne wznowienie i pamięć postępu.
 
 ## Następny krok
@@ -91,5 +93,5 @@ Jeśli projekt będzie kontynuowany, kolejnym krokiem powinno być:
 1. [x] doprecyzowanie architektury,
 2. [x] wybór sposobu pobierania danych z YouTube,
 3. [x] przygotowanie logowania Google dla prywatnych playlist,
-4. [ ] przygotowanie szkieletu `MediaSession` i obsługi Android Auto,
+4. [x] przygotowanie szkieletu `MediaSession` i obsługi Android Auto,
 5. [x] dodanie lokalnej historii oglądania.
