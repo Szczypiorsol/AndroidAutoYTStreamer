@@ -24,5 +24,31 @@ class PlaybackQueueBridgeTest {
         assertEquals(12, snapshot.playback.positionSeconds)
         assertNotSame(queue, snapshot.queue)
     }
+
+    @Test
+    fun `listener receives updates and can be removed`() {
+        var callbackCount = 0
+        var lastQueueSize = -1
+        val listener = PlaybackQueueListener { snapshot ->
+            callbackCount += 1
+            lastQueueSize = snapshot.queue.size
+        }
+
+        PlaybackQueueBridge.addListener(listener)
+        PlaybackQueueBridge.update(
+            queue = listOf(PlaylistVideo("x", "Video X")),
+            playback = PlaybackSnapshot()
+        )
+
+        val countAfterUpdate = callbackCount
+        PlaybackQueueBridge.removeListener(listener)
+        PlaybackQueueBridge.update(
+            queue = listOf(PlaylistVideo("x", "Video X"), PlaylistVideo("y", "Video Y")),
+            playback = PlaybackSnapshot()
+        )
+
+        assertEquals(1, lastQueueSize)
+        assertEquals(countAfterUpdate, callbackCount)
+    }
 }
 

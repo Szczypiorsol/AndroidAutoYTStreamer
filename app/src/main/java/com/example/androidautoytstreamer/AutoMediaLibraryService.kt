@@ -16,6 +16,13 @@ import com.google.common.util.concurrent.ListenableFuture
 class AutoMediaLibraryService : MediaLibraryService() {
     private var player: ExoPlayer? = null
     private var mediaLibrarySession: MediaLibrarySession? = null
+    private val queueListener = PlaybackQueueListener { snapshot ->
+        mediaLibrarySession?.notifyChildrenChanged(
+            ROOT_ID,
+            snapshot.queue.size,
+            null
+        )
+    }
 
     private val libraryCallback = object : MediaLibrarySession.Callback {
         override fun onGetLibraryRoot(
@@ -150,6 +157,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
         mediaLibrarySession = MediaLibrarySession.Builder(this, player!!, libraryCallback)
             .setId("auto-media-library")
             .build()
+        PlaybackQueueBridge.addListener(queueListener)
     }
 
     override fun onGetSession(controllerInfo: ControllerInfo): MediaLibrarySession? {
@@ -157,6 +165,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        PlaybackQueueBridge.removeListener(queueListener)
         mediaLibrarySession?.release()
         player?.release()
         mediaLibrarySession = null
