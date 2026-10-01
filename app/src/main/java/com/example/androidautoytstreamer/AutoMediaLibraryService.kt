@@ -189,6 +189,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
         private const val RESUME_ID = "queue_resume"
         private const val MAX_LIBRARY_ITEMS = 40
         private const val BROWSE_REFRESH_DEBOUNCE_MS = 300L
+        private const val FALLBACK_QUEUE_MAX_AGE_MS = 24L * 60L * 60L * 1000L
     }
 
     private fun scheduleChildrenChanged(itemCount: Int) {
@@ -205,7 +206,10 @@ class AutoMediaLibraryService : MediaLibraryService() {
 
     private fun getEffectiveQueue(snapshot: PlaybackQueueSnapshot): List<PlaylistVideo> {
         if (snapshot.queue.isNotEmpty()) return snapshot.queue
-        val fallbackQueue = historyStore.loadLastMiniQueue(MAX_LIBRARY_ITEMS)
+        val fallbackQueue = historyStore.loadLastMiniQueue(
+            limit = MAX_LIBRARY_ITEMS,
+            maxAgeMs = FALLBACK_QUEUE_MAX_AGE_MS
+        )
         return historyStore.applyToQueue(fallbackQueue)
     }
 

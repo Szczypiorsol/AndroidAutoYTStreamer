@@ -20,6 +20,7 @@ class PlaylistHistoryStore {
         @Volatile
         private var loadedFromDisk = false
         private val storageLock = Any()
+        private const val QUEUE_CACHE_TIMESTAMP_PREFIX = "#savedAt="
 
         fun initialize(filesDir: File) {
             synchronized(storageLock) {
@@ -125,18 +126,44 @@ class PlaylistHistoryStore {
                         .replace("\r", " ")
                     "${video.id}\t${safeTitle}\t${video.durationSeconds}"
                 }
-                file.writeText(rows)
+                val payload = if (rows.isEmpty()) {
+                    "$QUEUE_CACHE_TIMESTAMP_PREFIX${System.currentTimeMillis()}"
+                } else {
+                    "$QUEUE_CACHE_TIMESTAMP_PREFIX${System.currentTimeMillis()}\n$rows"
+                }
+                file.writeText(payload)
             }
         }
     }
 
-    fun loadLastMiniQueue(limit: Int = 40): List<PlaylistVideo> {
+    fun loadLastMiniQueue(
+        limit: Int = 40,
+        maxAgeMs: Long? = null,
+        nowMs: Long = System.currentTimeMillis()
+    ): List<PlaylistVideo> {
         synchronized(storageLock) {
             val file = queueCacheFile ?: return emptyList()
             if (!file.exists()) return emptyList()
 
             return runCatching {
-                file.readLines().mapNotNull { line ->
+                val lines = file.readLines()
+                if (lines.isEmpty()) return@runCatching emptyList()
+
+                val firstLine = lines.first()
+                val hasTimestampHeader = firstLine.startsWith(QUEUE_CACHE_TIMESTAMP_PREFIX)
+                val savedAtMs = if (hasTimestampHeader) {
+                    firstLine.removePrefix(QUEUE_CACHE_TIMESTAMP_PREFIX).toLongOrNull() ?: file.lastModified()
+                } else {
+                    file.lastModified()
+                }
+
+                if (maxAgeMs != null && maxAgeMs > 0L) {
+                    val ageMs = nowMs - savedAtMs
+                    if (ageMs > maxAgeMs) return@runCatching emptyList()
+                }
+
+                val entryLines = if (hasTimestampHeader) lines.drop(1) else lines
+                entryLines.mapNotNull { line ->
                     val parts = line.split("\t")
                     if (parts.size != 3) return@mapNotNull null
                     val videoId = parts[0]

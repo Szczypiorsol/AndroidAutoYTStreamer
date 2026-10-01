@@ -57,5 +57,24 @@ class PlaylistHistoryStoreTest {
         assertEquals(25, withHistory[0].resumeAtSeconds)
         assertEquals(WatchStatus.COMPLETED, withHistory[1].status)
     }
+
+    @Test
+    fun `mini queue cache expires when older than max age`() {
+        val tempDir = Files.createTempDirectory("history-queue-cache-expire-test").toFile()
+        PlaylistHistoryStore.clearInMemoryForTests()
+        PlaylistHistoryStore.initialize(tempDir)
+
+        val store = PlaylistHistoryStore()
+        store.saveLastMiniQueue(
+            listOf(PlaylistVideo("video-1", "Video 1", durationSeconds = 100))
+        )
+
+        val loaded = store.loadLastMiniQueue(
+            maxAgeMs = 1_000L,
+            nowMs = System.currentTimeMillis() + 10_000L
+        )
+
+        assertTrue(loaded.isEmpty())
+    }
 }
 
