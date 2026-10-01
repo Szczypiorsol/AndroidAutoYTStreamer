@@ -181,7 +181,11 @@ fun PlaylistScreen(
         }
 
         Text(
-            text = if (playbackSnapshot.isPlaying) "Playback: playing" else "Playback: paused",
+            text = when {
+                playbackSnapshot.queueEnded -> "Playback: queue finished"
+                playbackSnapshot.isPlaying -> "Playback: playing"
+                else -> "Playback: paused"
+            },
             style = MaterialTheme.typography.titleMedium
         )
 

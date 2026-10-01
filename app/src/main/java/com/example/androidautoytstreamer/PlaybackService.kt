@@ -13,7 +13,8 @@ import java.util.concurrent.CopyOnWriteArraySet
 data class PlaybackSnapshot(
     val currentVideo: PlaylistVideo? = null,
     val isPlaying: Boolean = false,
-    val positionSeconds: Int = 0
+    val positionSeconds: Int = 0,
+    val queueEnded: Boolean = false
 )
 
 fun interface PlaybackStateListener {
@@ -27,6 +28,7 @@ class PlaybackService : Service() {
     private val queue = mutableListOf<PlaylistVideo>()
     private var currentQueueIndex = -1
     private var lastKnownQueueIndex = -1
+    private var queueEnded = false
     private val playbackListeners = CopyOnWriteArraySet<PlaybackStateListener>()
 
     private val playerListener = object : Player.Listener {
@@ -43,13 +45,15 @@ class PlaybackService : Service() {
                 if (queue[newIndex].status == WatchStatus.COMPLETED) {
                     val nextPlayableIndex = findNextPlayableIndex(newIndex + 1)
                     if (nextPlayableIndex != null) {
+                        queueEnded = false
                         currentQueueIndex = nextPlayableIndex
                         localPlayer.seekToDefaultPosition(nextPlayableIndex)
                         localPlayer.play()
                     } else {
-                        localPlayer.pause()
+                        endQueuePlayback()
                     }
                 } else {
+                    queueEnded = false
                     markCurrentStarted()
                 }
             }
@@ -99,6 +103,7 @@ class PlaybackService : Service() {
     fun setQueue(videos: List<PlaylistVideo>) {
         queue.clear()
         queue.addAll(videos)
+        queueEnded = false
 
         if (queue.isEmpty()) {
             player?.clearMediaItems()
@@ -133,6 +138,7 @@ class PlaybackService : Service() {
 
     fun playCurrent() {
         if (player?.mediaItemCount == 0) return
+        if (queueEnded) return
         player?.play()
     }
 
@@ -144,6 +150,7 @@ class PlaybackService : Service() {
 
     fun resume() {
         if (player?.mediaItemCount == 0) return
+        if (queueEnded) return
         player?.play()
         notifyPlaybackState()
     }
@@ -151,7 +158,11 @@ class PlaybackService : Service() {
     fun next(): PlaylistVideo? {
         saveCurrentProgress()
         val nextIndex = findNextPlayableIndex(currentQueueIndex + 1)
-            ?: return null
+            ?: run {
+                endQueuePlayback()
+                return null
+            }
+        queueEnded = false
         currentQueueIndex = nextIndex
         lastKnownQueueIndex = nextIndex
         player?.seekToDefaultPosition(nextIndex)
@@ -165,6 +176,7 @@ class PlaybackService : Service() {
         saveCurrentProgress()
         val previousIndex = findPreviousPlayableIndex(currentQueueIndex - 1)
             ?: return null
+        queueEnded = false
         currentQueueIndex = previousIndex
         lastKnownQueueIndex = previousIndex
         player?.seekToDefaultPosition(previousIndex)
@@ -192,7 +204,8 @@ class PlaybackService : Service() {
         return PlaybackSnapshot(
             currentVideo = currentVideo(),
             isPlaying = localPlayer?.isPlaying == true,
-            positionSeconds = ((localPlayer?.currentPosition ?: 0L) / 1000L).toInt().coerceAtLeast(0)
+            positionSeconds = ((localPlayer?.currentPosition ?: 0L) / 1000L).toInt().coerceAtLeast(0),
+            queueEnded = queueEnded
         )
     }
 
@@ -233,6 +246,12 @@ class PlaybackService : Service() {
         playbackListeners.forEach { listener ->
             listener.onPlaybackStateChanged(snapshot)
         }
+    }
+
+    private fun endQueuePlayback() {
+        queueEnded = true
+        player?.pause()
+        notifyPlaybackState()
     }
 
     private fun findNextPlayableIndex(fromIndex: Int): Int? {

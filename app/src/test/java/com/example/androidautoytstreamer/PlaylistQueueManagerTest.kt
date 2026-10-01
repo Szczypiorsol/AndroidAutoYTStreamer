@@ -67,4 +67,21 @@ class PlaylistQueueManagerTest {
         assertEquals(55, reloadedCurrent?.resumeAtSeconds)
         assertEquals(WatchStatus.IN_PROGRESS, reloadedCurrent?.status)
     }
+
+    @Test
+    fun `next at end keeps current stable`() {
+        val queueManager = PlaylistQueueManager()
+        val videos = listOf(
+            PlaylistVideo("1", "Video 1", status = WatchStatus.IN_PROGRESS),
+            PlaylistVideo("2", "Video 2", status = WatchStatus.COMPLETED)
+        )
+
+        queueManager.setQueue(videos)
+        val currentBefore = queueManager.current()?.id
+
+        val next = queueManager.next()
+
+        assertEquals(null, next)
+        assertEquals(currentBefore, queueManager.current()?.id)
+    }
 }
