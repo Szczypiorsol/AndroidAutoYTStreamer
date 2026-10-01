@@ -29,4 +29,23 @@ class PlaylistQueueManagerTest {
         queueManager.markCompleted("3")
         assertEquals("4", queueManager.current()?.id)
     }
+
+    @Test
+    fun `next returns null and pause saves progress when only completed remain`() {
+        val queueManager = PlaylistQueueManager()
+        val videos = listOf(
+            PlaylistVideo("a", "Video A", status = WatchStatus.IN_PROGRESS),
+            PlaylistVideo("b", "Video B", status = WatchStatus.COMPLETED)
+        )
+
+        queueManager.setQueue(videos)
+
+        val next = queueManager.next()
+        assertEquals(null, next)
+
+        queueManager.markPaused("a", 42)
+        val snapshot = queueManager.snapshot()
+        assertEquals(WatchStatus.IN_PROGRESS, snapshot.first().status)
+        assertEquals(42, snapshot.first().resumeAtSeconds)
+    }
 }
