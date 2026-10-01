@@ -7,6 +7,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSession.ControllerInfo
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
@@ -76,7 +77,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
                             .setTitle("Resume: ${current.title}")
                             .setSubtitle("${playback.positionSeconds}s")
                             .setIsBrowsable(false)
-                            .setIsPlayable(false)
+                            .setIsPlayable(true)
                             .build()
                     )
                     .build()
@@ -98,7 +99,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
                             .setTitle(video.title)
                             .setSubtitle(statusText)
                             .setIsBrowsable(false)
-                            .setIsPlayable(false)
+                            .setIsPlayable(true)
                             .build()
                     )
                     .build()
@@ -117,6 +118,27 @@ class AutoMediaLibraryService : MediaLibraryService() {
                 LibraryResult.ofVoid()
             } else {
                 LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+            }
+            return Futures.immediateFuture(result)
+        }
+
+        override fun onAddMediaItems(
+            mediaSession: MediaSession,
+            controller: ControllerInfo,
+            mediaItems: MutableList<MediaItem>
+        ): ListenableFuture<MutableList<MediaItem>> {
+            val queueSnapshot = PlaybackQueueBridge.snapshot()
+            val queue = queueSnapshot.queue
+            val playback = queueSnapshot.playback
+
+            val resolvedItems = mediaItems.mapNotNull { requestedItem ->
+                resolveAutoPlayableItem(requestedItem.mediaId, queue, playback)
+            }.toMutableList()
+
+            val result = if (resolvedItems.isNotEmpty()) {
+                resolvedItems
+            } else {
+                mediaItems
             }
             return Futures.immediateFuture(result)
         }
@@ -147,6 +169,42 @@ class AutoMediaLibraryService : MediaLibraryService() {
         private const val EMPTY_ID = "queue_empty"
         private const val RESUME_ID = "queue_resume"
         private const val MAX_LIBRARY_ITEMS = 40
+    }
+
+}
+
+internal fun resolveAutoPlayableItem(
+    mediaId: String,
+    queue: List<PlaylistVideo>,
+    playback: PlaybackSnapshot
+): MediaItem? {
+    val selectedVideo = selectVideoForAutoMediaId(mediaId, queue, playback) ?: return null
+
+    return MediaItem.Builder()
+        .setMediaId(selectedVideo.id)
+        .setUri("https://www.youtube.com/watch?v=${selectedVideo.id}")
+        .setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle(selectedVideo.title)
+                .setIsPlayable(true)
+                .setIsBrowsable(false)
+                .build()
+        )
+        .build()
+}
+
+internal fun selectVideoForAutoMediaId(
+    mediaId: String,
+    queue: List<PlaylistVideo>,
+    playback: PlaybackSnapshot
+): PlaylistVideo? {
+    return when {
+        mediaId == "queue_resume" -> playback.currentVideo ?: queue.firstOrNull { it.status != WatchStatus.COMPLETED }
+        mediaId.startsWith("queue_") -> {
+            val videoId = mediaId.removePrefix("queue_")
+            queue.firstOrNull { it.id == videoId }
+        }
+        else -> null
     }
 }
 
