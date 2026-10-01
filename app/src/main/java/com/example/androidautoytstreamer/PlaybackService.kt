@@ -243,6 +243,7 @@ class PlaybackService : Service() {
 
     private fun notifyPlaybackState() {
         val snapshot = currentPlaybackSnapshot()
+        PlaybackQueueBridge.update(queue, snapshot)
         playbackListeners.forEach { listener ->
             listener.onPlaybackStateChanged(snapshot)
         }

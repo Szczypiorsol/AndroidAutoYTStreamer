@@ -47,19 +47,64 @@ class AutoMediaLibraryService : MediaLibraryService() {
                 return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.of(), params))
             }
 
-            val queueItem = MediaItem.Builder()
-                .setMediaId(QUEUE_ID)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle("Queue managed in app")
-                        .setSubtitle("Use phone app to choose playlist")
-                        .setIsBrowsable(false)
-                        .setIsPlayable(false)
-                        .build()
-                )
-                .build()
+            val queueSnapshot = PlaybackQueueBridge.snapshot()
+            val queue = queueSnapshot.queue
+            val playback = queueSnapshot.playback
 
-            return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.of(queueItem), params))
+            if (queue.isEmpty()) {
+                val emptyItem = MediaItem.Builder()
+                    .setMediaId(EMPTY_ID)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle("Queue is empty")
+                            .setSubtitle("Load playlist in phone app")
+                            .setIsBrowsable(false)
+                            .setIsPlayable(false)
+                            .build()
+                    )
+                    .build()
+                return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.of(emptyItem), params))
+            }
+
+            val items = mutableListOf<MediaItem>()
+
+            playback.currentVideo?.let { current ->
+                items += MediaItem.Builder()
+                    .setMediaId(RESUME_ID)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle("Resume: ${current.title}")
+                            .setSubtitle("${playback.positionSeconds}s")
+                            .setIsBrowsable(false)
+                            .setIsPlayable(false)
+                            .build()
+                    )
+                    .build()
+            }
+
+            queue.take(MAX_LIBRARY_ITEMS).forEach { video ->
+                val isCurrent = playback.currentVideo?.id == video.id
+                val statusText = when {
+                    video.status == WatchStatus.COMPLETED -> "completed"
+                    isCurrent && playback.isPlaying -> "playing"
+                    isCurrent -> "paused"
+                    else -> "queued"
+                }
+
+                items += MediaItem.Builder()
+                    .setMediaId("queue_${video.id}")
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(video.title)
+                            .setSubtitle(statusText)
+                            .setIsBrowsable(false)
+                            .setIsPlayable(false)
+                            .build()
+                    )
+                    .build()
+            }
+
+            return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(items), params))
         }
 
         override fun onSubscribe(
@@ -99,7 +144,9 @@ class AutoMediaLibraryService : MediaLibraryService() {
 
     companion object {
         private const val ROOT_ID = "root"
-        private const val QUEUE_ID = "queue"
+        private const val EMPTY_ID = "queue_empty"
+        private const val RESUME_ID = "queue_resume"
+        private const val MAX_LIBRARY_ITEMS = 40
     }
 }
 
