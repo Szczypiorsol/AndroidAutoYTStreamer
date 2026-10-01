@@ -30,5 +30,32 @@ class PlaylistHistoryStoreTest {
         assertEquals(37, reloaded[0].resumeAtSeconds)
         assertTrue(reloaded[1].status == WatchStatus.COMPLETED)
     }
+
+    @Test
+    fun `mini queue cache reloads with history state`() {
+        val tempDir = Files.createTempDirectory("history-queue-cache-test").toFile()
+        PlaylistHistoryStore.clearInMemoryForTests()
+        PlaylistHistoryStore.initialize(tempDir)
+
+        val store = PlaylistHistoryStore()
+        val queue = listOf(
+            PlaylistVideo("video-1", "Video 1", durationSeconds = 100),
+            PlaylistVideo("video-2", "Video 2", durationSeconds = 200)
+        )
+        store.saveLastMiniQueue(queue)
+        store.markPaused("video-1", 25)
+        store.markCompleted("video-2")
+
+        PlaylistHistoryStore.clearInMemoryForTests()
+        PlaylistHistoryStore.initialize(tempDir)
+
+        val reloadedQueue = PlaylistHistoryStore().loadLastMiniQueue()
+        val withHistory = PlaylistHistoryStore().applyToQueue(reloadedQueue)
+
+        assertEquals(2, withHistory.size)
+        assertEquals(WatchStatus.IN_PROGRESS, withHistory[0].status)
+        assertEquals(25, withHistory[0].resumeAtSeconds)
+        assertEquals(WatchStatus.COMPLETED, withHistory[1].status)
+    }
 }
 

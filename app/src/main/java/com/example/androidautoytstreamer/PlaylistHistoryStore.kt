@@ -16,12 +16,15 @@ class PlaylistHistoryStore {
         @Volatile
         private var storageFile: File? = null
         @Volatile
+        private var queueCacheFile: File? = null
+        @Volatile
         private var loadedFromDisk = false
         private val storageLock = Any()
 
         fun initialize(filesDir: File) {
             synchronized(storageLock) {
                 storageFile = File(filesDir, "playlist_history_state.txt")
+                queueCacheFile = File(filesDir, "playlist_queue_cache.txt")
                 if (!loadedFromDisk) {
                     loadFromDiskLocked()
                     loadedFromDisk = true
@@ -103,6 +106,53 @@ class PlaylistHistoryStore {
 
     fun hasCompleted(videoId: String): Boolean {
         return history[videoId]?.status == WatchStatus.COMPLETED
+    }
+
+    fun saveLastMiniQueue(queue: List<PlaylistVideo>, limit: Int = 40) {
+        synchronized(storageLock) {
+            val file = queueCacheFile ?: return
+
+            runCatching {
+                if (!file.exists()) {
+                    file.parentFile?.mkdirs()
+                    file.createNewFile()
+                }
+
+                val rows = queue.take(limit).joinToString(separator = "\n") { video ->
+                    val safeTitle = video.title
+                        .replace("\t", " ")
+                        .replace("\n", " ")
+                        .replace("\r", " ")
+                    "${video.id}\t${safeTitle}\t${video.durationSeconds}"
+                }
+                file.writeText(rows)
+            }
+        }
+    }
+
+    fun loadLastMiniQueue(limit: Int = 40): List<PlaylistVideo> {
+        synchronized(storageLock) {
+            val file = queueCacheFile ?: return emptyList()
+            if (!file.exists()) return emptyList()
+
+            return runCatching {
+                file.readLines().mapNotNull { line ->
+                    val parts = line.split("\t")
+                    if (parts.size != 3) return@mapNotNull null
+                    val videoId = parts[0]
+                    val title = parts[1]
+                    val durationSeconds = parts[2].toIntOrNull() ?: 0
+
+                    PlaylistVideo(
+                        id = videoId,
+                        title = title,
+                        durationSeconds = durationSeconds,
+                        status = WatchStatus.NOT_STARTED,
+                        resumeAtSeconds = 0
+                    )
+                }.take(limit)
+            }.getOrElse { emptyList() }
+        }
     }
 
     private fun persistIfConfigured() {

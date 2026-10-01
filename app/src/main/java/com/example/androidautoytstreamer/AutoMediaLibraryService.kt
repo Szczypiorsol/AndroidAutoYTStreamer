@@ -18,6 +18,7 @@ import com.google.common.util.concurrent.ListenableFuture
 class AutoMediaLibraryService : MediaLibraryService() {
     private var player: ExoPlayer? = null
     private var mediaLibrarySession: MediaLibrarySession? = null
+    private val historyStore = PlaylistHistoryStore()
     private var lastNotifiedQueueVersion = -1L
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingChildrenChanged: Runnable? = null
@@ -62,7 +63,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
             }
 
             val queueSnapshot = PlaybackQueueBridge.snapshot()
-            val queue = queueSnapshot.queue
+            val queue = getEffectiveQueue(queueSnapshot)
             val playback = queueSnapshot.playback
 
             if (queue.isEmpty()) {
@@ -141,7 +142,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
             mediaItems: MutableList<MediaItem>
         ): ListenableFuture<MutableList<MediaItem>> {
             val queueSnapshot = PlaybackQueueBridge.snapshot()
-            val queue = queueSnapshot.queue
+            val queue = getEffectiveQueue(queueSnapshot)
             val playback = queueSnapshot.playback
 
             val resolvedItems = mediaItems.mapNotNull { requestedItem ->
@@ -159,6 +160,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
+        PlaylistHistoryStore.initialize(filesDir)
         player = ExoPlayer.Builder(this).build()
         mediaLibrarySession = MediaLibrarySession.Builder(this, player!!, libraryCallback)
             .setId("auto-media-library")
@@ -199,6 +201,12 @@ class AutoMediaLibraryService : MediaLibraryService() {
         }
         pendingChildrenChanged = runnable
         mainHandler.postDelayed(runnable, BROWSE_REFRESH_DEBOUNCE_MS)
+    }
+
+    private fun getEffectiveQueue(snapshot: PlaybackQueueSnapshot): List<PlaylistVideo> {
+        if (snapshot.queue.isNotEmpty()) return snapshot.queue
+        val fallbackQueue = historyStore.loadLastMiniQueue(MAX_LIBRARY_ITEMS)
+        return historyStore.applyToQueue(fallbackQueue)
     }
 
 }
