@@ -16,7 +16,12 @@ import com.google.common.util.concurrent.ListenableFuture
 class AutoMediaLibraryService : MediaLibraryService() {
     private var player: ExoPlayer? = null
     private var mediaLibrarySession: MediaLibrarySession? = null
+    private var lastNotifiedQueueVersion = -1L
     private val queueListener = PlaybackQueueListener { snapshot ->
+        if (snapshot.queueVersion == lastNotifiedQueueVersion) {
+            return@PlaybackQueueListener
+        }
+        lastNotifiedQueueVersion = snapshot.queueVersion
         mediaLibrarySession?.notifyChildrenChanged(
             ROOT_ID,
             snapshot.queue.size,

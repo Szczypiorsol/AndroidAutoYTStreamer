@@ -2,7 +2,8 @@ package com.example.androidautoytstreamer
 
 data class PlaybackQueueSnapshot(
     val queue: List<PlaylistVideo> = emptyList(),
-    val playback: PlaybackSnapshot = PlaybackSnapshot()
+    val playback: PlaybackSnapshot = PlaybackSnapshot(),
+    val queueVersion: Long = 0L
 )
 
 fun interface PlaybackQueueListener {
@@ -16,7 +17,15 @@ object PlaybackQueueBridge {
 
     @Synchronized
     fun update(queue: List<PlaylistVideo>, playback: PlaybackSnapshot) {
-        state = PlaybackQueueSnapshot(queue = queue.toList(), playback = playback)
+        val queueCopy = queue.toList()
+        val queueChanged = queueCopy != state.queue
+        val nextVersion = if (queueChanged) state.queueVersion + 1L else state.queueVersion
+
+        state = PlaybackQueueSnapshot(
+            queue = queueCopy,
+            playback = playback,
+            queueVersion = nextVersion
+        )
         val snapshot = state
         listeners.forEach { it.onQueueSnapshotChanged(snapshot) }
     }
@@ -32,6 +41,12 @@ object PlaybackQueueBridge {
     @Synchronized
     fun removeListener(listener: PlaybackQueueListener) {
         listeners.remove(listener)
+    }
+
+    @Synchronized
+    internal fun resetForTests() {
+        listeners.clear()
+        state = PlaybackQueueSnapshot()
     }
 }
 

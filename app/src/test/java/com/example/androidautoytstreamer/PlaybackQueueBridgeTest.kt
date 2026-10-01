@@ -2,9 +2,15 @@ package com.example.androidautoytstreamer
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
+import org.junit.Before
 import org.junit.Test
 
 class PlaybackQueueBridgeTest {
+    @Before
+    fun setUp() {
+        PlaybackQueueBridge.resetForTests()
+    }
+
     @Test
     fun `bridge stores queue snapshot copy`() {
         val queue = mutableListOf(
@@ -22,6 +28,7 @@ class PlaybackQueueBridgeTest {
         assertEquals(1, snapshot.queue.size)
         assertEquals("1", snapshot.queue.first().id)
         assertEquals(12, snapshot.playback.positionSeconds)
+        assertEquals(1L, snapshot.queueVersion)
         assertNotSame(queue, snapshot.queue)
     }
 
@@ -49,6 +56,30 @@ class PlaybackQueueBridgeTest {
 
         assertEquals(1, lastQueueSize)
         assertEquals(countAfterUpdate, callbackCount)
+    }
+
+    @Test
+    fun `queue version increments only when queue changes`() {
+        PlaybackQueueBridge.update(
+            queue = listOf(PlaylistVideo("1", "Video 1")),
+            playback = PlaybackSnapshot(positionSeconds = 1)
+        )
+        val firstVersion = PlaybackQueueBridge.snapshot().queueVersion
+
+        PlaybackQueueBridge.update(
+            queue = listOf(PlaylistVideo("1", "Video 1")),
+            playback = PlaybackSnapshot(positionSeconds = 99)
+        )
+        val secondVersion = PlaybackQueueBridge.snapshot().queueVersion
+
+        PlaybackQueueBridge.update(
+            queue = listOf(PlaylistVideo("1", "Video 1"), PlaylistVideo("2", "Video 2")),
+            playback = PlaybackSnapshot(positionSeconds = 100)
+        )
+        val thirdVersion = PlaybackQueueBridge.snapshot().queueVersion
+
+        assertEquals(firstVersion, secondVersion)
+        assertEquals(firstVersion + 1L, thirdVersion)
     }
 }
 
