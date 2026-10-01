@@ -14,6 +14,7 @@ class PlaybackService : Service() {
     private var mediaSession: MediaSession? = null
 
     inner class LocalBinder : Binder() {
+        fun getService(): PlaybackService = this@PlaybackService
         fun getPlayer(): ExoPlayer? = player
     }
 
@@ -46,4 +47,3 @@ class PlaybackService : Service() {
         player?.play()
     }
 }
-
