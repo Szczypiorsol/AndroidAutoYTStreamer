@@ -1,6 +1,8 @@
 package com.example.androidautoytstreamer
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.exoplayer.ExoPlayer
@@ -17,16 +19,15 @@ class AutoMediaLibraryService : MediaLibraryService() {
     private var player: ExoPlayer? = null
     private var mediaLibrarySession: MediaLibrarySession? = null
     private var lastNotifiedQueueVersion = -1L
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var pendingChildrenChanged: Runnable? = null
+    private var pendingChildrenCount = 0
     private val queueListener = PlaybackQueueListener { snapshot ->
         if (snapshot.queueVersion == lastNotifiedQueueVersion) {
             return@PlaybackQueueListener
         }
         lastNotifiedQueueVersion = snapshot.queueVersion
-        mediaLibrarySession?.notifyChildrenChanged(
-            ROOT_ID,
-            snapshot.queue.size,
-            null
-        )
+        scheduleChildrenChanged(snapshot.queue.size)
     }
 
     private val libraryCallback = object : MediaLibrarySession.Callback {
@@ -171,6 +172,8 @@ class AutoMediaLibraryService : MediaLibraryService() {
 
     override fun onDestroy() {
         PlaybackQueueBridge.removeListener(queueListener)
+        pendingChildrenChanged?.let { mainHandler.removeCallbacks(it) }
+        pendingChildrenChanged = null
         mediaLibrarySession?.release()
         player?.release()
         mediaLibrarySession = null
@@ -183,6 +186,19 @@ class AutoMediaLibraryService : MediaLibraryService() {
         private const val EMPTY_ID = "queue_empty"
         private const val RESUME_ID = "queue_resume"
         private const val MAX_LIBRARY_ITEMS = 40
+        private const val BROWSE_REFRESH_DEBOUNCE_MS = 300L
+    }
+
+    private fun scheduleChildrenChanged(itemCount: Int) {
+        pendingChildrenCount = itemCount
+        pendingChildrenChanged?.let { mainHandler.removeCallbacks(it) }
+
+        val runnable = Runnable {
+            mediaLibrarySession?.notifyChildrenChanged(ROOT_ID, pendingChildrenCount, null)
+            pendingChildrenChanged = null
+        }
+        pendingChildrenChanged = runnable
+        mainHandler.postDelayed(runnable, BROWSE_REFRESH_DEBOUNCE_MS)
     }
 
 }
