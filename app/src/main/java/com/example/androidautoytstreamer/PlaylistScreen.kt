@@ -1,5 +1,6 @@
 package com.example.androidautoytstreamer
 
+import android.app.Activity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -34,9 +36,16 @@ fun PlaylistScreen(
     onGoogleSignIn: () -> Unit = {},
     onGoogleSignOut: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val authManager = remember(activity) { if (activity != null) GoogleAuthManager(activity) else null }
+    val playlistRepository = remember(authManager) { if (authManager != null) YouTubePrivatePlaylistRepository(context, authManager) else null }
+
     val viewModel = remember { PlaylistViewModel() }
     var playlistInput by remember { mutableStateOf("PL8A5A9D5E0AF1D4F4") }
     var isPlaying by remember { mutableStateOf(false) }
+    var privatePlaylists by remember { mutableStateOf<List<PlaylistSummary>>(emptyList()) }
+    var selectedPlaylistId by remember { mutableStateOf<String?>(null) }
     var loadedQueue by remember {
         mutableStateOf(
             listOf(
@@ -77,10 +86,50 @@ fun PlaylistScreen(
                 Text(if (isSignedIn) "Sign in again" else "Google sign in")
             }
             Button(
-                onClick = onGoogleSignOut,
+                onClick = {
+                    onGoogleSignOut()
+                    privatePlaylists = emptyList()
+                    selectedPlaylistId = null
+                },
                 modifier = Modifier.weight(1f).height(56.dp)
             ) {
                 Text("Sign out")
+            }
+        }
+
+        if (isSignedIn && playlistRepository != null) {
+            Button(
+                onClick = {
+                    privatePlaylists = playlistRepository.loadPlaylists().getOrElse { emptyList() }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Load my playlists")
+            }
+        }
+
+        if (privatePlaylists.isNotEmpty()) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text("My playlists")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        privatePlaylists.forEach { playlist ->
+                            Button(
+                                onClick = {
+                                    selectedPlaylistId = playlist.id
+                                    val items = playlistRepository?.loadPlaylistItems(playlist.id)?.getOrElse { emptyList() } ?: emptyList()
+                                    if (items.isNotEmpty()) {
+                                        loadedQueue = items
+                                        viewModel.loadPlaylist(items)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(playlist.title)
+                            }
+                        }
+                    }
+                }
             }
         }
 
