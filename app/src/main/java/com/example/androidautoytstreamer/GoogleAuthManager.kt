@@ -1,6 +1,7 @@
 package com.example.androidautoytstreamer
 
 import android.app.Activity
+import android.content.Intent
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
@@ -15,6 +16,8 @@ class GoogleAuthManager(private val activity: Activity) {
 
     val signInClient: GoogleSignInClient = GoogleSignIn.getClient(activity, googleSignInOptions)
 
+    fun signInIntent(): Intent = signInClient.signInIntent
+
     fun getCurrentAccount(): GoogleSignInAccount? = GoogleSignIn.getLastSignedInAccount(activity)
 
     fun signOut(onComplete: (() -> Unit)? = null) {
@@ -23,4 +26,3 @@ class GoogleAuthManager(private val activity: Activity) {
         }
     }
 }
-

@@ -26,10 +26,13 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun PlaylistScreen(
     modifier: Modifier = Modifier,
+    isSignedIn: Boolean = false,
     onPlay: () -> Unit = {},
     onPause: () -> Unit = {},
     onNext: () -> Unit = {},
-    onPrevious: () -> Unit = {}
+    onPrevious: () -> Unit = {},
+    onGoogleSignIn: () -> Unit = {},
+    onGoogleSignOut: () -> Unit = {}
 ) {
     val viewModel = remember { PlaylistViewModel() }
     var playlistInput by remember { mutableStateOf("PL8A5A9D5E0AF1D4F4") }
@@ -57,6 +60,29 @@ fun PlaylistScreen(
             text = "Car mode playlist",
             style = MaterialTheme.typography.headlineMedium
         )
+
+        Text(
+            text = if (isSignedIn) "Google: signed in" else "Google: not signed in",
+            style = MaterialTheme.typography.titleMedium
+        )
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Button(
+                onClick = onGoogleSignIn,
+                modifier = Modifier.weight(1f).height(56.dp)
+            ) {
+                Text(if (isSignedIn) "Sign in again" else "Google sign in")
+            }
+            Button(
+                onClick = onGoogleSignOut,
+                modifier = Modifier.weight(1f).height(56.dp)
+            ) {
+                Text("Sign out")
+            }
+        }
 
         Text(
             text = if (isPlaying) "Playback: playing" else "Playback: paused",
