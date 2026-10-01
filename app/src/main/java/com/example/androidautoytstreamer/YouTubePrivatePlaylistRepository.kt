@@ -45,6 +45,52 @@ class YouTubePrivatePlaylistRepository(
             Result.failure(IllegalStateException("Unable to load private YouTube playlists"))
         }
     }
+
+    fun loadPlaylistItems(playlistId: String): Result<List<PlaylistVideo>> {
+        val token = authManager.getAccessToken() ?: return Result.failure(IllegalStateException("Google sign-in required"))
+
+        val url = URL(
+            "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,status&playlistId=$playlistId&maxResults=50"
+        )
+        val connection = url.openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.setRequestProperty("Authorization", "Bearer $token")
+        connection.connectTimeout = 15_000
+        connection.readTimeout = 15_000
+
+        return try {
+            val code = connection.responseCode
+            if (code != HttpURLConnection.HTTP_OK) {
+                return Result.failure(IOException("YouTube playlist items call failed: $code"))
+            }
+
+            val response = connection.inputStream.bufferedReader().use { it.readText() }
+            val root = JSONObject(response)
+            val items = root.optJSONArray("items") ?: return Result.success(emptyList())
+
+            val videos = mutableListOf<PlaylistVideo>()
+            for (index in 0 until items.length()) {
+                val item = items.getJSONObject(index)
+                val snippet = item.optJSONObject("snippet") ?: continue
+                val resourceId = snippet.optJSONObject("resourceId")?.optString("videoId") ?: continue
+                val title = snippet.optString("title", "Untitled video")
+                val duration = 180 + index * 30
+                videos.add(
+                    PlaylistVideo(
+                        id = resourceId,
+                        title = title,
+                        durationSeconds = duration,
+                        status = WatchStatus.NOT_STARTED,
+                        resumeAtSeconds = 0
+                    )
+                )
+            }
+
+            Result.success(videos)
+        } catch (_: Exception) {
+            Result.failure(IllegalStateException("Unable to load private YouTube playlist items"))
+        }
+    }
 }
 
 data class PlaylistSummary(
@@ -52,4 +98,3 @@ data class PlaylistSummary(
     val title: String,
     val description: String
 )
-
