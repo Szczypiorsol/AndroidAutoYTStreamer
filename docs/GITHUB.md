@@ -6,11 +6,11 @@
 
 ## Krótki opis repo
 
-Aplikacja Android do bezpiecznego sterowania długą playlistą YouTube z poziomu Android Auto, z lokalną historią odtwarzania i wznowieniem ostatniego niedokończonego filmu.
+Aplikacja Android do bezpiecznego odtwarzania długiej playlisty YouTube w trybie telefonu i Android Auto, z lokalną historią odtwarzania i wznowieniem ostatniego niedokończonego filmu.
 
 ## Opis do wklejenia na GitHuba
 
-AndroidAutoYTStreamer to aplikacja Android do bezpiecznego sterowania długą playlistą YouTube z poziomu Android Auto. Projekt zakłada odtwarzanie materiałów po kolei, zapamiętywanie postępu, pomijanie już obejrzanych filmów i wznowienie ostatniego niedokończonego filmu bez sięgania po telefon podczas jazdy.
+AndroidAutoYTStreamer to aplikacja Android do bezpiecznego odtwarzania długiej playlisty YouTube w dwóch trybach: telefon i Android Auto. Projekt zakłada odtwarzanie materiałów po kolei, zapamiętywanie postępu, pomijanie już obejrzanych filmów i wznowienie ostatniego niedokończonego filmu. W samochodzie interfejs jest uproszczony pod bezpieczne, minimalne interakcje.
 
 ## Tagi / topics
 

@@ -25,6 +25,13 @@ Dodatkowo przy niektórych operacjach przydatny może być:
 
 W praktyce do listy playlist, ich nazw i listy filmów zwykle wystarcza `youtube.readonly`.
 
+## Kiedy OAuth jest wymagany
+
+- publiczna playlista YouTube: OAuth nie jest wymagany,
+- prywatna playlista YouTube: OAuth jest wymagany,
+- tryb telefonu i Android Auto używają tej samej reguły dostępu,
+- w praktyce logowanie najlepiej wykonać na telefonie, a potem korzystać z gotowej sesji podczas użycia Android Auto.
+
 ## Flow działania
 
 1. Użytkownik uruchamia aplikację.
@@ -55,14 +62,9 @@ W praktyce do listy playlist, ich nazw i listy filmów zwykle wystarcza `youtube
 - użyć `GoogleSignIn.getLastSignedInAccount(context)`,
 - pobrać token dostępu i wysyłać zapytania do YouTube API.
 
-## Rekomendacja dla MVP
+## Uwaga o planowaniu MVP
 
-Nie zaczynaj od pełnego OAuth od razu. Najbardziej sensowne jest:
-
-1. najpierw MVP bez logowania,
-2. potem Google Sign-In,
-3. potem prywatne playlisty,
-4. potem Android Auto i poprawki UX.
+Szczegóły kolejności etapów wdrożenia są opisane w `docs/PLAN.md`, żeby dokument OAuth pozostał techniczną instrukcją integracji.
 
 ## Wniosek
 
