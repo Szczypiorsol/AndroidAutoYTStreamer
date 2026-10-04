@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.res.Configuration
 import android.os.Bundle
 import android.os.IBinder
 import androidx.activity.ComponentActivity
@@ -29,6 +30,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var signInLauncher: ActivityResultLauncher<Intent>
     private val isSignedInState = mutableStateOf(false)
     private val playbackSnapshotState = mutableStateOf(PlaybackSnapshot())
+    private var wasInCarMode = false
 
     private val playbackStateListener = PlaybackStateListener { snapshot ->
         playbackSnapshotState.value = snapshot
@@ -41,6 +43,7 @@ class MainActivity : ComponentActivity() {
             playbackService?.addPlaybackStateListener(playbackStateListener)
             playbackSnapshotState.value = playbackService?.currentPlaybackSnapshot() ?: PlaybackSnapshot()
             mediaSessionController = MediaSessionController(this@MainActivity)
+            maybeAutoResumeOnCarModeTransition()
         }
 
         override fun onServiceDisconnected(className: ComponentName) {
@@ -73,6 +76,7 @@ class MainActivity : ComponentActivity() {
 
         val intent = Intent(this, PlaybackService::class.java)
         bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        wasInCarMode = isCarModeActive(resources.configuration)
 
         setContent {
             AndroidAutoYTStreamerTheme {
@@ -103,11 +107,41 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        maybeAutoResumeOnCarModeTransition()
+    }
+
     override fun onDestroy() {
         playbackService?.removePlaybackStateListener(playbackStateListener)
         super.onDestroy()
         unbindService(serviceConnection)
     }
+
+    private fun maybeAutoResumeOnCarModeTransition() {
+        val isInCarMode = isCarModeActive(resources.configuration)
+        val snapshot = playbackSnapshotState.value
+        if (shouldAutoResumeOnCarModeTransition(wasInCarMode, isInCarMode, snapshot)) {
+            playbackService?.resume() ?: mediaSessionController?.play()
+        }
+        wasInCarMode = isInCarMode
+    }
+}
+
+internal fun isCarModeActive(configuration: Configuration): Boolean {
+    val mode = configuration.uiMode and Configuration.UI_MODE_TYPE_MASK
+    return mode == Configuration.UI_MODE_TYPE_CAR
+}
+
+internal fun shouldAutoResumeOnCarModeTransition(
+    wasInCarMode: Boolean,
+    isInCarMode: Boolean,
+    snapshot: PlaybackSnapshot
+): Boolean {
+    if (wasInCarMode || !isInCarMode) return false
+    if (snapshot.isPlaying) return false
+    if (snapshot.queueEnded) return false
+    return snapshot.currentVideo != null
 }
 
 @Preview(showBackground = true)
