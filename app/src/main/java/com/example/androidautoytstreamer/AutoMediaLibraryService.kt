@@ -39,6 +39,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
             browser: ControllerInfo,
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<MediaItem>> {
+            AppLog.d("AutoMediaLibraryService onGetLibraryRoot browser=${browser.packageName}")
             val rootItem = MediaItem.Builder()
                 .setMediaId(ROOT_ID)
                 .setMediaMetadata(
@@ -60,6 +61,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
             pageSize: Int,
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+            AppLog.d("AutoMediaLibraryService onGetChildren parentId=$parentId page=$page pageSize=$pageSize browser=${browser.packageName}")
             if (parentId != ROOT_ID) {
                 return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.of(), params))
             }
@@ -69,6 +71,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
             val playback = queueSnapshot.playback
 
             if (queue.isEmpty()) {
+                AppLog.d("AutoMediaLibraryService onGetChildren: queue is empty")
                 val emptyItem = MediaItem.Builder()
                     .setMediaId(EMPTY_ID)
                     .setMediaMetadata(
@@ -121,6 +124,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
                     .build()
             }
 
+            AppLog.d("AutoMediaLibraryService onGetChildren returning ${items.size} items")
             return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(items), params))
         }
 
@@ -130,6 +134,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
             parentId: String,
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<Void>> {
+            AppLog.d("AutoMediaLibraryService onSubscribe parentId=$parentId browser=${browser.packageName}")
             val result = if (parentId == ROOT_ID) {
                 LibraryResult.ofVoid()
             } else {
@@ -143,6 +148,8 @@ class AutoMediaLibraryService : MediaLibraryService() {
             controller: ControllerInfo,
             mediaItems: MutableList<MediaItem>
         ): ListenableFuture<MutableList<MediaItem>> {
+            val requestedIds = mediaItems.map { it.mediaId }
+            AppLog.d("AutoMediaLibraryService onAddMediaItems requested=$requestedIds")
             val queueSnapshot = PlaybackQueueBridge.snapshot()
             val queue = getEffectiveQueue(queueSnapshot)
             val playback = queueSnapshot.playback
@@ -151,17 +158,20 @@ class AutoMediaLibraryService : MediaLibraryService() {
                 resolveAutoPlayableItem(requestedItem.mediaId, queue, playback)
             }.toMutableList()
 
-            val result = if (resolvedItems.isNotEmpty()) {
+            val finalItems = if (resolvedItems.isNotEmpty()) {
                 resolvedItems
             } else {
                 mediaItems
             }
-            return Futures.immediateFuture(result)
+            AppLog.d("AutoMediaLibraryService onAddMediaItems resolved ${finalItems.size} items: ${finalItems.map { it.mediaId }}")
+            return Futures.immediateFuture(finalItems)
         }
     }
 
     override fun onCreate() {
         super.onCreate()
+        AppLog.initialize(filesDir)
+        AppLog.d("AutoMediaLibraryService.onCreate")
         PlaylistHistoryStore.initialize(filesDir)
         player = ExoPlayer.Builder(this).build()
         mediaLibrarySession = MediaLibrarySession.Builder(this, player!!, libraryCallback)
@@ -175,6 +185,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        AppLog.d("AutoMediaLibraryService.onDestroy")
         PlaybackQueueBridge.removeListener(queueListener)
         pendingChildrenChanged?.let { mainHandler.removeCallbacks(it) }
         pendingChildrenChanged = null
@@ -199,6 +210,7 @@ class AutoMediaLibraryService : MediaLibraryService() {
         pendingChildrenChanged?.let { mainHandler.removeCallbacks(it) }
 
         val runnable = Runnable {
+            AppLog.d("AutoMediaLibraryService notifying children changed for ROOT_ID ($pendingChildrenCount items)")
             mediaLibrarySession?.notifyChildrenChanged(ROOT_ID, pendingChildrenCount, null)
             pendingChildrenChanged = null
         }
@@ -263,4 +275,3 @@ internal fun selectVideoForAutoMediaId(
         else -> null
     }
 }
-

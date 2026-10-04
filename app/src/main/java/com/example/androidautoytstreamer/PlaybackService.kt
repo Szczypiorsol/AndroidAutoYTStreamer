@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
@@ -33,9 +34,25 @@ class PlaybackService : Service() {
     private val playbackListeners = CopyOnWriteArraySet<PlaybackStateListener>()
 
     private val playerListener = object : Player.Listener {
+        override fun onPlayerError(error: PlaybackException) {
+            AppLog.e("PlaybackService ExoPlayer error [code=${error.errorCodeName}]: ${error.message}", error)
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            val stateName = when (playbackState) {
+                Player.STATE_IDLE -> "STATE_IDLE"
+                Player.STATE_BUFFERING -> "STATE_BUFFERING"
+                Player.STATE_READY -> "STATE_READY"
+                Player.STATE_ENDED -> "STATE_ENDED"
+                else -> "UNKNOWN($playbackState)"
+            }
+            AppLog.d("PlaybackService ExoPlayer state changed -> $stateName")
+        }
+
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val localPlayer = player ?: return
             val newIndex = localPlayer.currentMediaItemIndex
+            AppLog.d("PlaybackService media transition: item='${mediaItem?.mediaId}', reason=$reason, newIndex=$newIndex")
 
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
                 markCompletedAt(lastKnownQueueIndex)
@@ -68,6 +85,7 @@ class PlaybackService : Service() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            AppLog.d("PlaybackService isPlaying changed -> $isPlaying (current=${currentVideo()?.title})")
             if (isPlaying) {
                 markCurrentStarted()
             } else {
@@ -83,7 +101,9 @@ class PlaybackService : Service() {
             controller: MediaSession.ControllerInfo,
             playerCommand: Int
         ): Int {
-            return if (isPlayerCommandAllowed(queueEnded, playerCommand)) {
+            val allowed = isPlayerCommandAllowed(queueEnded, playerCommand)
+            AppLog.d("PlaybackService mediaSession onPlayerCommandRequest cmd=$playerCommand allowed=$allowed")
+            return if (allowed) {
                 SessionResult.RESULT_SUCCESS
             } else {
                 SessionResult.RESULT_ERROR_INVALID_STATE
@@ -98,6 +118,8 @@ class PlaybackService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        AppLog.initialize(this)
+        AppLog.d("PlaybackService.onCreate")
         PlaylistHistoryStore.initialize(filesDir)
         player = ExoPlayer.Builder(this).build()
         player?.addListener(playerListener)
@@ -107,6 +129,7 @@ class PlaybackService : Service() {
     }
 
     override fun onDestroy() {
+        AppLog.d("PlaybackService.onDestroy")
         saveCurrentProgress()
         player?.removeListener(playerListener)
         mediaSession?.release()
@@ -115,11 +138,15 @@ class PlaybackService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        AppLog.d("PlaybackService.onTaskRemoved")
         saveCurrentProgress()
         super.onTaskRemoved(rootIntent)
     }
 
-    override fun onBind(intent: Intent?): IBinder = binder
+    override fun onBind(intent: Intent?): IBinder {
+        AppLog.d("PlaybackService.onBind intent=$intent")
+        return binder
+    }
 
     fun setQueue(videos: List<PlaylistVideo>) {
         queue.clear()
@@ -127,6 +154,7 @@ class PlaybackService : Service() {
         queueEnded = false
 
         if (queue.isEmpty()) {
+            AppLog.d("PlaybackService.setQueue called with EMPTY queue")
             player?.clearMediaItems()
             currentQueueIndex = -1
             notifyPlaybackState()
@@ -140,6 +168,8 @@ class PlaybackService : Service() {
 
         currentQueueIndex = preferredIndex
         lastKnownQueueIndex = preferredIndex
+        AppLog.d("PlaybackService.setQueue: count=${queue.size}, preferredIndex=$preferredIndex (${queue[preferredIndex].title})")
+
         val mediaItems = queue.map { video ->
             MediaItem.Builder()
                 .setMediaId(video.id)
@@ -158,18 +188,21 @@ class PlaybackService : Service() {
     }
 
     fun playCurrent() {
+        AppLog.d("PlaybackService.playCurrent: index=$currentQueueIndex video=${currentVideo()?.title}")
         if (player?.mediaItemCount == 0) return
         if (queueEnded) return
         player?.play()
     }
 
     fun pause() {
+        AppLog.d("PlaybackService.pause: index=$currentQueueIndex video=${currentVideo()?.title}")
         saveCurrentProgress()
         player?.pause()
         notifyPlaybackState()
     }
 
     fun resume() {
+        AppLog.d("PlaybackService.resume: index=$currentQueueIndex video=${currentVideo()?.title}")
         if (player?.mediaItemCount == 0) return
         if (queueEnded) return
         player?.play()
@@ -180,9 +213,11 @@ class PlaybackService : Service() {
         saveCurrentProgress()
         val nextIndex = findNextPlayableIndex(currentQueueIndex + 1)
             ?: run {
+                AppLog.d("PlaybackService.next: no more playable items in queue")
                 endQueuePlayback()
                 return null
             }
+        AppLog.d("PlaybackService.next: advancing from index $currentQueueIndex to $nextIndex (${queue[nextIndex].title})")
         queueEnded = false
         currentQueueIndex = nextIndex
         lastKnownQueueIndex = nextIndex
@@ -196,7 +231,11 @@ class PlaybackService : Service() {
     fun previous(): PlaylistVideo? {
         saveCurrentProgress()
         val previousIndex = findPreviousPlayableIndex(currentQueueIndex - 1)
-            ?: return null
+            ?: run {
+                AppLog.d("PlaybackService.previous: no previous playable items in queue")
+                return null
+            }
+        AppLog.d("PlaybackService.previous: going back from index $currentQueueIndex to $previousIndex (${queue[previousIndex].title})")
         queueEnded = false
         currentQueueIndex = previousIndex
         lastKnownQueueIndex = previousIndex
@@ -248,6 +287,7 @@ class PlaybackService : Service() {
         if (current.status == WatchStatus.COMPLETED) return
 
         val resumeSeconds = (localPlayer.currentPosition / 1000L).toInt().coerceAtLeast(0)
+        AppLog.d("PlaybackService saveCurrentProgress: video=${current.id}, resumeAtSeconds=$resumeSeconds")
         queue[currentQueueIndex] = current.copy(
             status = WatchStatus.IN_PROGRESS,
             resumeAtSeconds = resumeSeconds
@@ -258,6 +298,7 @@ class PlaybackService : Service() {
     private fun markCompletedAt(index: Int) {
         if (index !in queue.indices) return
         val current = queue[index]
+        AppLog.d("PlaybackService markCompletedAt: index=$index, video=${current.id}")
         queue[index] = current.copy(status = WatchStatus.COMPLETED, resumeAtSeconds = 0)
         notifyPlaybackState()
     }
@@ -272,6 +313,7 @@ class PlaybackService : Service() {
     }
 
     private fun endQueuePlayback() {
+        AppLog.d("PlaybackService endQueuePlayback: queue has ended")
         queueEnded = true
         player?.pause()
         notifyPlaybackState()
@@ -333,4 +375,3 @@ private fun findPlayableIndexBackward(queue: List<PlaylistVideo>, fromIndex: Int
     }
     return null
 }
-

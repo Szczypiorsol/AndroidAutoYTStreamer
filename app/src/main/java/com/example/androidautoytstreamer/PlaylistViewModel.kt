@@ -2,16 +2,17 @@ package com.example.androidautoytstreamer
 
 import androidx.lifecycle.ViewModel
 
-class PlaylistViewModel : ViewModel() {
-    private val queueManager = PlaylistQueueManager()
-    private val repository = YouTubePlaylistRepository()
+class PlaylistViewModel(
+    private val queueManager: PlaylistQueueManager = PlaylistQueueManager(),
+    private val loadPlaylistFromInput: (String) -> Result<List<PlaylistVideo>> = YouTubePlaylistRepository()::loadPlaylistFromUrl
+) : ViewModel() {
 
     fun loadPlaylist(videos: List<PlaylistVideo>) {
         queueManager.setQueue(videos)
     }
 
     fun loadFromPlaylistInput(rawInput: String): Result<List<PlaylistVideo>> {
-        val result = repository.loadPlaylistFromUrl(rawInput)
+        val result = loadPlaylistFromInput(rawInput)
         result.getOrNull()?.let { queueManager.setQueue(it) }
         return result
     }
@@ -26,7 +27,6 @@ class PlaylistViewModel : ViewModel() {
 
     fun markPaused(videoId: String, secondsWatched: Int) = queueManager.markPaused(videoId, secondsWatched)
 
-    fun markCompleted(videoId: String) = queueManager.markCompleted(videoId)
 
     fun remainingVideos(): List<PlaylistVideo> = queueManager.remainingVideos()
 

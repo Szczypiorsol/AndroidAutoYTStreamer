@@ -54,6 +54,9 @@ class PlaylistHistoryStore {
                     val resumeAtSeconds = parts[2].toIntOrNull() ?: 0
                     sharedHistory[videoId] = HistoryEntry(status, resumeAtSeconds)
                 }
+                AppLog.d("PlaylistHistoryStore: loaded ${sharedHistory.size} entries from disk")
+            }.onFailure {
+                AppLog.e("PlaylistHistoryStore: failed to load from disk", it)
             }
         }
 
@@ -70,6 +73,8 @@ class PlaylistHistoryStore {
                     "${entry.key}\t${entry.value.status.name}\t${entry.value.resumeAtSeconds}"
                 }
                 file.writeText(rows)
+            }.onFailure {
+                AppLog.e("PlaylistHistoryStore: failed to persist to disk", it)
             }
         }
     }
@@ -132,6 +137,8 @@ class PlaylistHistoryStore {
                     "$QUEUE_CACHE_TIMESTAMP_PREFIX${System.currentTimeMillis()}\n$rows"
                 }
                 file.writeText(payload)
+            }.onFailure {
+                AppLog.e("PlaylistHistoryStore: failed to save mini queue cache", it)
             }
         }
     }
@@ -159,11 +166,14 @@ class PlaylistHistoryStore {
 
                 if (maxAgeMs != null && maxAgeMs > 0L) {
                     val ageMs = nowMs - savedAtMs
-                    if (ageMs > maxAgeMs) return@runCatching emptyList()
+                    if (ageMs > maxAgeMs) {
+                        AppLog.d("PlaylistHistoryStore: cached mini queue is expired (ageMs=$ageMs > maxAgeMs=$maxAgeMs)")
+                        return@runCatching emptyList()
+                    }
                 }
 
                 val entryLines = if (hasTimestampHeader) lines.drop(1) else lines
-                entryLines.mapNotNull { line ->
+                val items = entryLines.mapNotNull { line ->
                     val parts = line.split("\t")
                     if (parts.size != 3) return@mapNotNull null
                     val videoId = parts[0]
@@ -178,7 +188,12 @@ class PlaylistHistoryStore {
                         resumeAtSeconds = 0
                     )
                 }.take(limit)
-            }.getOrElse { emptyList() }
+                AppLog.d("PlaylistHistoryStore: loaded ${items.size} items from cached mini queue")
+                items
+            }.getOrElse {
+                AppLog.e("PlaylistHistoryStore: error loading last mini queue cache", it)
+                emptyList()
+            }
         }
     }
 
@@ -190,4 +205,3 @@ class PlaylistHistoryStore {
         }
     }
 }
-

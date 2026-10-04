@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,45 +31,114 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private enum class PlaylistLoadRetryAction {
+    LOAD_PLAYLISTS,
+    LOAD_SELECTED_PLAYLIST
+}
+
 @Composable
 fun PlaylistScreen(
     modifier: Modifier = Modifier,
     isSignedIn: Boolean = false,
+    signedInEmail: String? = null,
+    logFilePath: String? = null,
     onPlay: () -> Unit = {},
     onPause: () -> Unit = {},
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
+    onOpenCurrentInYoutube: (String) -> Unit = {},
     onGoogleSignIn: () -> Unit = {},
     onGoogleSignOut: () -> Unit = {},
     onQueueLoaded: (List<PlaylistVideo>) -> Unit = {},
-    playbackSnapshot: PlaybackSnapshot = PlaybackSnapshot()
+    playbackSnapshot: PlaybackSnapshot = PlaybackSnapshot(),
+    viewModel: PlaylistViewModel? = null
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
     val authManager = remember(activity) { if (activity != null) GoogleAuthManager(activity) else null }
     val playlistRepository = remember(authManager) { if (authManager != null) YouTubePrivatePlaylistRepository(context, authManager) else null }
+    val resolvedViewModel = viewModel ?: remember { PlaylistViewModel() }
 
-    val viewModel = remember { PlaylistViewModel() }
-    var playlistInput by remember { mutableStateOf("PL8A5A9D5E0AF1D4F4") }
+    var playlistInput by remember { mutableStateOf("") }
     var privatePlaylists by remember { mutableStateOf<List<PlaylistSummary>>(emptyList()) }
     var selectedPlaylistId by remember { mutableStateOf<String?>(null) }
+    var playlistFilter by remember { mutableStateOf("") }
     var playlistError by remember { mutableStateOf<String?>(null) }
     var isLoadingPlaylists by remember { mutableStateOf(false) }
     var isLoadingPlaylistItems by remember { mutableStateOf(false) }
-    var loadedQueue by remember {
-        mutableStateOf(
-            listOf(
-                PlaylistVideo("1", "Film 1", 240, WatchStatus.NOT_STARTED),
-                PlaylistVideo("2", "Film 2", 300, WatchStatus.NOT_STARTED),
-                PlaylistVideo("3", "Film 3", 180, WatchStatus.COMPLETED),
-                PlaylistVideo("4", "Film 4", 420, WatchStatus.IN_PROGRESS, 90)
-            )
-        )
-    }
+    var retryAction by remember { mutableStateOf<PlaylistLoadRetryAction?>(null) }
+    var loadedQueue by remember { mutableStateOf(resolvedViewModel.snapshot()) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(loadedQueue) {
-        viewModel.loadPlaylist(loadedQueue)
+        resolvedViewModel.loadPlaylist(loadedQueue)
+    }
+
+    fun loadPrivatePlaylists() {
+        if (playlistRepository == null) {
+            playlistError = "Zaloguj się przez Google, aby wczytać prywatne playlisty"
+            retryAction = null
+            AppLog.e("PlaylistScreen: Attempted to load private playlists without Google auth")
+            return
+        }
+
+        scope.launch {
+            AppLog.d("PlaylistScreen: Loading private playlists...")
+            isLoadingPlaylists = true
+            playlistError = null
+            retryAction = null
+
+            val result = withContext(Dispatchers.IO) {
+                playlistRepository.loadPlaylists()
+            }
+
+            privatePlaylists = result.getOrElse { error ->
+                AppLog.e("PlaylistScreen: Loading private playlists failed: ${error.message}", error)
+                playlistError = error.message ?: "Unable to load playlists"
+                retryAction = PlaylistLoadRetryAction.LOAD_PLAYLISTS
+                emptyList()
+            }
+            isLoadingPlaylists = false
+        }
+    }
+
+    fun loadPlaylistItems(playlistId: String) {
+        if (playlistRepository == null) {
+            playlistError = "Zaloguj się przez Google, aby pobrać playlistę"
+            retryAction = null
+            AppLog.e("PlaylistScreen: Attempted to load playlist $playlistId without Google auth")
+            return
+        }
+
+        scope.launch {
+            AppLog.d("PlaylistScreen: Loading playlist items for playlistId=$playlistId...")
+            selectedPlaylistId = playlistId
+            isLoadingPlaylistItems = true
+            playlistError = null
+            retryAction = null
+
+            val items = withContext(Dispatchers.IO) {
+                playlistRepository.loadPlaylistItems(playlistId)
+            }.getOrElse { error ->
+                AppLog.e("PlaylistScreen: Loading items failed for playlistId=$playlistId: ${error.message}", error)
+                playlistError = error.message ?: "Unable to load playlist items"
+                retryAction = PlaylistLoadRetryAction.LOAD_SELECTED_PLAYLIST
+                emptyList()
+            }
+
+            if (items.isNotEmpty()) {
+                AppLog.d("PlaylistScreen: Loaded ${items.size} items for playlistId=$playlistId")
+                loadedQueue = items
+                onQueueLoaded(items)
+                retryAction = null
+            } else if (playlistError == null) {
+                AppLog.d("PlaylistScreen: Playlist $playlistId is empty")
+                playlistError = "Playlist is empty"
+                retryAction = null
+            }
+
+            isLoadingPlaylistItems = false
+        }
     }
 
     Column(
@@ -88,13 +157,27 @@ fun PlaylistScreen(
             style = MaterialTheme.typography.titleMedium
         )
 
+        if (signedInEmail != null) {
+            Text(
+                text = "Account: $signedInEmail",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+
+        if (logFilePath != null) {
+            Text(
+                text = "App log: $logFilePath",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Button(
                 onClick = onGoogleSignIn,
-                modifier = Modifier.weight(1f).height(56.dp)
+                modifier = Modifier.weight(1f).heightIn(min = 56.dp)
             ) {
                 Text(if (isSignedIn) "Sign in again" else "Google sign in")
             }
@@ -102,9 +185,12 @@ fun PlaylistScreen(
                 onClick = {
                     onGoogleSignOut()
                     privatePlaylists = emptyList()
+                    playlistFilter = ""
                     selectedPlaylistId = null
+                    retryAction = null
+                    playlistError = null
                 },
-                modifier = Modifier.weight(1f).height(56.dp)
+                modifier = Modifier.weight(1f).heightIn(min = 56.dp)
             ) {
                 Text("Sign out")
             }
@@ -112,20 +198,7 @@ fun PlaylistScreen(
 
         if (isSignedIn && playlistRepository != null) {
             Button(
-                onClick = {
-                    scope.launch {
-                        isLoadingPlaylists = true
-                        playlistError = null
-                        val result = withContext(Dispatchers.IO) {
-                            playlistRepository.loadPlaylists()
-                        }
-                        privatePlaylists = result.getOrElse {
-                            playlistError = it.message ?: "Unable to load playlists"
-                            emptyList()
-                        }
-                        isLoadingPlaylists = false
-                    }
-                },
+                onClick = { loadPrivatePlaylists() },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Load my playlists")
@@ -137,39 +210,58 @@ fun PlaylistScreen(
         }
 
         if (playlistError != null) {
-            Text(
-                text = playlistError ?: "",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = playlistError ?: "",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+
+                when (retryAction) {
+                    PlaylistLoadRetryAction.LOAD_PLAYLISTS -> {
+                        Button(onClick = { loadPrivatePlaylists() }) {
+                            Text("Retry")
+                        }
+                    }
+
+                    PlaylistLoadRetryAction.LOAD_SELECTED_PLAYLIST -> {
+                        val playlistId = selectedPlaylistId
+                        if (playlistId != null) {
+                            Button(onClick = { loadPlaylistItems(playlistId) }) {
+                                Text("Retry playlist")
+                            }
+                        }
+                    }
+
+                    null -> Unit
+                }
+            }
         }
 
         if (privatePlaylists.isNotEmpty()) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text("My playlists")
+                    OutlinedTextField(
+                        value = playlistFilter,
+                        onValueChange = { playlistFilter = it },
+                        label = { Text("Filter playlists by name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    val filteredPlaylists = privatePlaylists.filter { playlist ->
+                        val query = playlistFilter.trim()
+                        query.isEmpty() ||
+                            playlist.title.contains(query, ignoreCase = true) ||
+                            playlist.description.contains(query, ignoreCase = true)
+                    }
+                    Text(
+                        text = "Found: ${filteredPlaylists.size}/${privatePlaylists.size}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        privatePlaylists.forEach { playlist ->
+                        filteredPlaylists.forEach { playlist ->
                             Button(
-                                onClick = {
-                                    scope.launch {
-                                        selectedPlaylistId = playlist.id
-                                        isLoadingPlaylistItems = true
-                                        playlistError = null
-                                        val items = withContext(Dispatchers.IO) {
-                                            playlistRepository?.loadPlaylistItems(playlist.id)
-                                        }?.getOrElse {
-                                            playlistError = it.message ?: "Unable to load playlist items"
-                                            emptyList()
-                                        } ?: emptyList()
-
-                                        if (items.isNotEmpty()) {
-                                            loadedQueue = items
-                                            onQueueLoaded(items)
-                                        }
-                                        isLoadingPlaylistItems = false
-                                    }
-                                },
+                                onClick = { loadPlaylistItems(playlist.id) },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(playlist.title)
@@ -179,6 +271,11 @@ fun PlaylistScreen(
                 }
             }
         }
+
+        Text(
+            text = "Queue items: ${resolvedViewModel.remainingVideos().size}",
+            style = MaterialTheme.typography.bodyMedium
+        )
 
         Text(
             text = when {
@@ -196,15 +293,15 @@ fun PlaylistScreen(
             Button(
                 onClick = {
                     onPlay()
-                    val currentVideo = viewModel.currentVideo()
+                    val currentVideo = resolvedViewModel.currentVideo()
                     if (currentVideo != null) {
-                        viewModel.markStarted(currentVideo.id)
-                        loadedQueue = viewModel.snapshot()
+                        resolvedViewModel.markStarted(currentVideo.id)
+                        loadedQueue = resolvedViewModel.snapshot()
                     }
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .height(72.dp),
+                    .heightIn(min = 64.dp),
                 colors = ButtonDefaults.buttonColors()
             ) {
                 Text("Play")
@@ -212,19 +309,34 @@ fun PlaylistScreen(
             Button(
                 onClick = {
                     onPause()
-                    val currentVideo = viewModel.currentVideo()
+                    val currentVideo = resolvedViewModel.currentVideo()
                     if (currentVideo != null) {
-                        viewModel.markPaused(currentVideo.id, playbackSnapshot.positionSeconds)
-                        loadedQueue = viewModel.snapshot()
+                        resolvedViewModel.markPaused(currentVideo.id, playbackSnapshot.positionSeconds)
+                        loadedQueue = resolvedViewModel.snapshot()
                     }
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .height(72.dp)
+                    .heightIn(min = 64.dp)
             ) {
                 Text("Pause")
             }
         }
+
+        val currentVideoIdForFallback = (playbackSnapshot.currentVideo ?: resolvedViewModel.currentVideo())?.id
+        if (currentVideoIdForFallback != null) {
+            Button(
+                onClick = { onOpenCurrentInYoutube(currentVideoIdForFallback) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Open current in YouTube")
+            }
+        }
+
+        Text(
+            text = "Note: if in-app playback does not start on phone, use 'Open current in YouTube'.",
+            style = MaterialTheme.typography.bodySmall
+        )
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -233,24 +345,24 @@ fun PlaylistScreen(
             Button(
                 onClick = {
                     onPrevious()
-                    viewModel.previousVideo()
-                    loadedQueue = viewModel.snapshot()
+                    resolvedViewModel.previousVideo()
+                    loadedQueue = resolvedViewModel.snapshot()
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .height(72.dp)
+                    .heightIn(min = 64.dp)
             ) {
                 Text("Prev")
             }
             Button(
                 onClick = {
                     onNext()
-                    viewModel.nextVideo()
-                    loadedQueue = viewModel.snapshot()
+                    resolvedViewModel.nextVideo()
+                    loadedQueue = resolvedViewModel.snapshot()
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .height(72.dp)
+                    .heightIn(min = 64.dp)
             ) {
                 Text("Next")
             }
@@ -266,15 +378,20 @@ fun PlaylistScreen(
         Button(
             onClick = {
                 scope.launch {
+                    AppLog.d("PlaylistScreen: User requested loading playlist from input '$playlistInput'")
                     playlistError = null
+                    retryAction = null
                     val result = withContext(Dispatchers.IO) {
-                        viewModel.loadFromPlaylistInput(playlistInput)
+                        resolvedViewModel.loadFromPlaylistInput(playlistInput)
                     }
                     result.getOrNull()?.let {
+                        AppLog.d("PlaylistScreen: Loaded playlist with ${it.size} items")
                         loadedQueue = it
                         onQueueLoaded(it)
                     } ?: run {
-                        playlistError = result.exceptionOrNull()?.message ?: "Unable to load playlist"
+                        val errMsg = result.exceptionOrNull()?.message ?: "Unable to load playlist"
+                        AppLog.e("PlaylistScreen: Failed to load playlist from input: $errMsg")
+                        playlistError = errMsg
                     }
                 }
             },
@@ -283,7 +400,7 @@ fun PlaylistScreen(
             Text("Load playlist")
         }
 
-        val current = playbackSnapshot.currentVideo ?: viewModel.currentVideo()
+        val current = playbackSnapshot.currentVideo ?: resolvedViewModel.currentVideo()
         if (current != null) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -293,10 +410,30 @@ fun PlaylistScreen(
                     Text(text = "Resume: ${playbackSnapshot.positionSeconds}s")
                 }
             }
+        } else {
+            Text(
+                text = "No active video. Load a playlist above to start the phone flow.",
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
 
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(viewModel.remainingVideos()) { video ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val remainingVideos = resolvedViewModel.remainingVideos()
+            if (remainingVideos.isEmpty()) {
+                item {
+                    Text(
+                        text = "Queue is empty",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
+            items(remainingVideos) { video ->
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(video.title)

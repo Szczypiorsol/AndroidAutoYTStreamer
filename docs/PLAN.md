@@ -100,6 +100,7 @@ Stworzyć aplikację Android do bezpiecznego odtwarzania długich playlist z You
 ## Następny krok
 
 Jeśli projekt będzie kontynuowany, kolejnym krokiem powinno być:
+Uwaga: ekran telefonu ma już pusty stan startowy, activity-scoped `PlaylistViewModel`, retry dla błędów ładowania, bezpieczny `LazyColumn` oraz testy edge-case dla pustej kolejki i pustego inputu playlisty.
 1. [ ] dopracowanie UX telefonu jako głównej ścieżki testowej,
 2. [ ] dopracowanie UX Android Auto pod minimalną liczbę interakcji,
 3. [x] automatyczne wznowienie po połączeniu z autem,

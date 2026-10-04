@@ -14,40 +14,39 @@ class YouTubePlaylistRepository {
         val input = rawInput.trim()
         if (input.isEmpty()) return null
 
-        if (input.matches(Regex("^[A-Za-z0-9_-]{10,}$"))) {
-            return input
+        val parsedId = when {
+            input.matches(Regex("^[A-Za-z0-9_-]{10,}$")) -> input
+            else -> {
+                Regex("(?:[?&]|/)(?:list=)([A-Za-z0-9_-]{10,})").find(input)?.groupValues?.get(1)
+                    ?: Regex("(?:youtu\\.be/|youtube\\.com/shorts/)([A-Za-z0-9_-]{10,})").find(input)?.groupValues?.get(1)
+                    ?: Regex("/playlist\\?list=([A-Za-z0-9_-]{10,})").find(input)?.groupValues?.get(1)
+            }
         }
-
-        val directListMatch = Regex("(?:[?&]|/)(?:list=)([A-Za-z0-9_-]{10,})").find(input)
-        if (directListMatch != null) {
-            return directListMatch.groupValues[1]
-        }
-
-        val shortLinkMatch = Regex("(?:youtu\\.be/|youtube\\.com/shorts/)([A-Za-z0-9_-]{10,})").find(input)
-        if (shortLinkMatch != null) {
-            return shortLinkMatch.groupValues[1]
-        }
-
-        val playlistPathMatch = Regex("/playlist\\?list=([A-Za-z0-9_-]{10,})").find(input)
-        if (playlistPathMatch != null) {
-            return playlistPathMatch.groupValues[1]
-        }
-
-        return null
+        AppLog.d("parsePlaylistId: '$rawInput' -> ${parsedId ?: "UNPARSED"}")
+        return parsedId
     }
 
     fun loadPlaylistFromUrl(rawInput: String, apiKey: String? = BuildConfig.YOUTUBE_API_KEY.takeIf { it.isNotBlank() }): Result<List<PlaylistVideo>> {
+        AppLog.d("loadPlaylistFromUrl called with input='$rawInput'")
         val playlistId = parsePlaylistId(rawInput)
-            ?: return Result.failure(IllegalArgumentException("Invalid YouTube playlist URL or ID"))
+            ?: run {
+                AppLog.e("loadPlaylistFromUrl: Invalid YouTube playlist URL or ID '$rawInput'")
+                return Result.failure(IllegalArgumentException("Invalid YouTube playlist URL or ID"))
+            }
 
         val key = apiKey?.trim()?.takeIf { it.isNotEmpty() }
         if (key == null) {
+            AppLog.d("loadPlaylistFromUrl: No YouTube API key configured. Generating fallback videos for playlistId=$playlistId")
             return Result.success(generateFallbackVideos(playlistId))
         }
 
         return try {
-            Result.success(fetchPlaylistFromApi(playlistId, key))
-        } catch (_: Exception) {
+            AppLog.d("loadPlaylistFromUrl: Fetching playlistId=$playlistId with API key")
+            val videos = fetchPlaylistFromApi(playlistId, key)
+            AppLog.d("loadPlaylistFromUrl: Successfully loaded ${videos.size} items for playlistId=$playlistId")
+            Result.success(videos)
+        } catch (e: Exception) {
+            AppLog.e("loadPlaylistFromUrl failed for playlistId=$playlistId: ${e.message}. Falling back to fallback videos.", e)
             Result.success(generateFallbackVideos(playlistId))
         }
     }
@@ -70,7 +69,10 @@ class YouTubePlaylistRepository {
         connection.connect()
 
         val responseCode = connection.responseCode
+        AppLog.d("fetchPlaylistFromApi: HTTP response code=$responseCode for playlistId=$playlistId")
         if (responseCode != HttpURLConnection.HTTP_OK) {
+            val errText = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+            AppLog.e("fetchPlaylistFromApi error body for playlistId=$playlistId: $errText")
             throw IOException("Unexpected response code: $responseCode")
         }
 
@@ -97,6 +99,7 @@ class YouTubePlaylistRepository {
         }
 
         return if (videos.isEmpty()) {
+            AppLog.d("fetchPlaylistFromApi: items array was empty for playlistId=$playlistId, returning fallback")
             generateFallbackVideos(playlistId)
         } else {
             videos

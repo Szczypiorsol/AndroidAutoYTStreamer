@@ -25,21 +25,40 @@ class GoogleAuthManager(private val activity: Activity) {
 
     fun getCurrentAccount(): GoogleSignInAccount? = GoogleSignIn.getLastSignedInAccount(activity)
 
-    fun getAccessToken(): String? {
+    fun getCurrentAccountIdentifier(): String? {
         val account = getCurrentAccount() ?: return null
-        val accountName = account.account ?: return null
+        return account.account?.name ?: account.email
+    }
+
+    fun getAccessToken(): String? {
+        val account = getCurrentAccount()
+        if (account == null) {
+            AppLog.d("GoogleAuthManager.getAccessToken: no signed-in Google account")
+            return null
+        }
+        val accountName = account.account
+        if (accountName == null) {
+            AppLog.d("GoogleAuthManager.getAccessToken: account.account is null")
+            return null
+        }
 
         return try {
-            GoogleAuthUtil.getToken(activity, accountName, "oauth2:$youtubeScope")
-        } catch (_: IOException) {
+            val token = GoogleAuthUtil.getToken(activity, accountName, "oauth2:$youtubeScope")
+            AppLog.d("GoogleAuthManager.getAccessToken: token successfully retrieved for ${accountName.name}")
+            token
+        } catch (e: IOException) {
+            AppLog.e("GoogleAuthManager.getAccessToken IOException: ${e.message}", e)
             null
-        } catch (_: GoogleAuthException) {
+        } catch (e: GoogleAuthException) {
+            AppLog.e("GoogleAuthManager.getAccessToken GoogleAuthException: ${e.message}", e)
             null
         }
     }
 
     fun signOut(onComplete: (() -> Unit)? = null) {
+        AppLog.d("GoogleAuthManager.signOut initiated")
         signInClient.signOut().addOnCompleteListener(activity) {
+            AppLog.d("GoogleAuthManager.signOut completed")
             onComplete?.invoke()
         }
     }

@@ -13,31 +13,46 @@ class MediaSessionController(
     private val controllerFuture: ListenableFuture<MediaController> = MediaController.Builder(context, sessionToken).buildAsync()
 
     fun play() {
+        AppLog.d("MediaSessionController.play requested")
         controllerFuture.addListener({
-            val controller = controllerFuture.get()
-            controller.play()
+            runCatching {
+                val controller = controllerFuture.get()
+                controller.play()
+                AppLog.d("MediaSessionController.play dispatched to controller")
+            }.onFailure { AppLog.e("MediaSessionController.play failed", it) }
         }, { it.run() })
     }
 
     fun pause() {
+        AppLog.d("MediaSessionController.pause requested")
         controllerFuture.addListener({
-            val controller = controllerFuture.get()
-            controller.pause()
+            runCatching {
+                val controller = controllerFuture.get()
+                controller.pause()
+                AppLog.d("MediaSessionController.pause dispatched to controller")
+            }.onFailure { AppLog.e("MediaSessionController.pause failed", it) }
         }, { it.run() })
     }
 
     fun next() {
+        AppLog.d("MediaSessionController.next requested")
         controllerFuture.addListener({
-            val controller = controllerFuture.get()
-            controller.seekToNextMediaItem()
+            runCatching {
+                val controller = controllerFuture.get()
+                controller.seekToNextMediaItem()
+                AppLog.d("MediaSessionController.next dispatched to controller")
+            }.onFailure { AppLog.e("MediaSessionController.next failed", it) }
         }, { it.run() })
     }
 
     fun previous() {
+        AppLog.d("MediaSessionController.previous requested")
         controllerFuture.addListener({
-            val controller = controllerFuture.get()
-            controller.seekToPreviousMediaItem()
+            runCatching {
+                val controller = controllerFuture.get()
+                controller.seekToPreviousMediaItem()
+                AppLog.d("MediaSessionController.previous dispatched to controller")
+            }.onFailure { AppLog.e("MediaSessionController.previous failed", it) }
         }, { it.run() })
     }
 }
-

@@ -11,7 +11,13 @@ class YouTubePrivatePlaylistRepository(
     private val authManager: GoogleAuthManager
 ) {
     fun loadPlaylists(): Result<List<PlaylistSummary>> {
-        val token = authManager.getAccessToken() ?: return Result.failure(IllegalStateException("Google sign-in required"))
+        AppLog.initialize(context)
+        AppLog.d("Loading private playlists from YouTube API")
+        val token = authManager.getAccessToken()
+        if (token == null) {
+            AppLog.e("loadPlaylists failed: Google access token is null")
+            return Result.failure(IllegalStateException("Google sign-in required"))
+        }
 
         val url = URL("https://www.googleapis.com/youtube/v3/playlists?part=snippet,status&mine=true&maxResults=25")
         val connection = url.openConnection() as HttpURLConnection
@@ -22,7 +28,10 @@ class YouTubePrivatePlaylistRepository(
 
         return try {
             val code = connection.responseCode
+            AppLog.d("loadPlaylists HTTP response code=$code")
             if (code != HttpURLConnection.HTTP_OK) {
+                val errBody = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                AppLog.e("loadPlaylists HTTP error $code body: $errBody")
                 return Result.failure(IOException("YouTube API call failed: $code"))
             }
 
@@ -40,14 +49,22 @@ class YouTubePrivatePlaylistRepository(
                 playlists.add(PlaylistSummary(id, title, description))
             }
 
+            AppLog.d("Loaded private playlists count=${playlists.size}")
             Result.success(playlists)
-        } catch (_: Exception) {
+        } catch (exception: Exception) {
+            AppLog.e("Unable to load private YouTube playlists", exception)
             Result.failure(IllegalStateException("Unable to load private YouTube playlists"))
         }
     }
 
     fun loadPlaylistItems(playlistId: String): Result<List<PlaylistVideo>> {
-        val token = authManager.getAccessToken() ?: return Result.failure(IllegalStateException("Google sign-in required"))
+        AppLog.initialize(context)
+        AppLog.d("Loading items for playlistId=$playlistId")
+        val token = authManager.getAccessToken()
+        if (token == null) {
+            AppLog.e("loadPlaylistItems failed for playlistId=$playlistId: Google access token is null")
+            return Result.failure(IllegalStateException("Google sign-in required"))
+        }
 
         val url = URL(
             "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,status&playlistId=$playlistId&maxResults=50"
@@ -60,7 +77,10 @@ class YouTubePrivatePlaylistRepository(
 
         return try {
             val code = connection.responseCode
+            AppLog.d("loadPlaylistItems HTTP response code=$code for playlistId=$playlistId")
             if (code != HttpURLConnection.HTTP_OK) {
+                val errBody = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                AppLog.e("loadPlaylistItems HTTP error $code body for playlistId=$playlistId: $errBody")
                 return Result.failure(IOException("YouTube playlist items call failed: $code"))
             }
 
@@ -86,8 +106,10 @@ class YouTubePrivatePlaylistRepository(
                 )
             }
 
+            AppLog.d("Loaded playlist items count=${videos.size} for playlistId=$playlistId")
             Result.success(videos)
-        } catch (_: Exception) {
+        } catch (exception: Exception) {
+            AppLog.e("Unable to load private YouTube playlist items for playlistId=$playlistId", exception)
             Result.failure(IllegalStateException("Unable to load private YouTube playlist items"))
         }
     }

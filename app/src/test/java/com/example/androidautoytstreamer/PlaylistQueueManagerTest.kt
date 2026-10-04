@@ -2,9 +2,27 @@ package com.example.androidautoytstreamer
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Before
 import org.junit.Test
 
 class PlaylistQueueManagerTest {
+    @Before
+    fun setUp() {
+        PlaylistHistoryStore.clearInMemoryForTests()
+    }
+
+    @Test
+    fun `empty queue has no current next or previous video`() {
+        val queueManager = PlaylistQueueManager()
+
+        queueManager.setQueue(emptyList())
+
+        assertEquals(null, queueManager.current())
+        assertEquals(null, queueManager.next())
+        assertEquals(null, queueManager.previous())
+        assertEquals(emptyList<PlaylistVideo>(), queueManager.remainingVideos())
+    }
+
     @Test
     fun `queue skips completed videos and resumes unfinished item`() {
         val queueManager = PlaylistQueueManager()

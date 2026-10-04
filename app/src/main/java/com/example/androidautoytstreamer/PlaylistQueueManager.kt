@@ -15,6 +15,7 @@ class PlaylistQueueManager {
         if (currentIndex == -1 && queue.isNotEmpty()) {
             currentIndex = 0
         }
+        AppLog.d("PlaylistQueueManager.setQueue: total=${queue.size}, currentIndex=$currentIndex")
     }
 
     fun next(): PlaylistVideo? {
@@ -23,9 +24,11 @@ class PlaylistQueueManager {
         for (index in startIndex + 1 until queue.size) {
             if (queue[index].status != WatchStatus.COMPLETED) {
                 currentIndex = index
+                AppLog.d("PlaylistQueueManager.next -> index=$currentIndex (${queue[currentIndex].title})")
                 return queue[currentIndex]
             }
         }
+        AppLog.d("PlaylistQueueManager.next -> no next item")
         return null
     }
 
@@ -35,9 +38,11 @@ class PlaylistQueueManager {
         for (index in startIndex - 1 downTo 0) {
             if (queue[index].status != WatchStatus.COMPLETED) {
                 currentIndex = index
+                AppLog.d("PlaylistQueueManager.previous -> index=$currentIndex (${queue[currentIndex].title})")
                 return queue[currentIndex]
             }
         }
+        AppLog.d("PlaylistQueueManager.previous -> no previous item")
         return null
     }
 
@@ -53,6 +58,7 @@ class PlaylistQueueManager {
         queue[index] = current.copy(status = WatchStatus.IN_PROGRESS)
         historyStore.markStarted(videoId, current.resumeAtSeconds)
         currentIndex = index
+        AppLog.d("PlaylistQueueManager.markStarted: videoId=$videoId")
     }
 
     fun markCompleted(videoId: String) {
@@ -61,6 +67,7 @@ class PlaylistQueueManager {
         val current = queue[index]
         queue[index] = current.copy(status = WatchStatus.COMPLETED, resumeAtSeconds = 0)
         historyStore.markCompleted(videoId)
+        AppLog.d("PlaylistQueueManager.markCompleted: videoId=$videoId")
         if (currentIndex == index) {
             currentIndex = nextIndexAfterCompletion(index)
         }
@@ -72,6 +79,7 @@ class PlaylistQueueManager {
         val current = queue[index]
         queue[index] = current.copy(status = WatchStatus.IN_PROGRESS, resumeAtSeconds = secondsWatched)
         historyStore.markPaused(videoId, secondsWatched)
+        AppLog.d("PlaylistQueueManager.markPaused: videoId=$videoId at ${secondsWatched}s")
     }
 
     fun remainingVideos(): List<PlaylistVideo> {
