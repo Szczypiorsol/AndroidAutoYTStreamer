@@ -2,11 +2,12 @@
 
 ## Cel
 
-Stworzyć aplikację Android do bezpiecznego sterowania odtwarzaniem długich playlist z YouTube z poziomu Android Auto, bez konieczności sięgania po telefon podczas jazdy.
+Stworzyć aplikację Android do bezpiecznego odtwarzania długich playlist z YouTube w dwóch trybach: telefon i Android Auto, z minimalną liczbą interakcji podczas jazdy.
 
 ## Najważniejsze wymagania
 
 - sterowanie z ekranu samochodu w Android Auto,
+- pełna obsługa na telefonie do konfiguracji, testów i codziennego użycia,
 - odtwarzanie playlisty YouTube po kolei,
 - zapamiętywanie postępu odtwarzania,
 - pomijanie już obejrzanych materiałów,
@@ -37,7 +38,7 @@ Stworzyć aplikację Android do bezpiecznego sterowania odtwarzaniem długich pl
 - [x] brak potrzeby używania telefonu podczas jazdy,
 - [x] główne sterowanie z Android Auto,
 - [x] duże i proste elementy UI,
-- [ ] preferowane automatyczne wznawianie po podłączeniu do auta.
+- [x] preferowane automatyczne wznawianie po podłączeniu do auta.
 
 ## Proponowany zakres MVP
 
@@ -71,7 +72,7 @@ Stworzyć aplikację Android do bezpiecznego sterowania odtwarzaniem długich pl
 
 ### Etap 4 - wygoda
 - [ ] ulubione playlisty,
-- [ ] automatyczne wznowienie po połączeniu z autem,
+- [x] automatyczne wznowienie po połączeniu z autem,
 - [x] zapamiętywanie ostatniego punktu odtwarzania,
 - [ ] dopracowanie UX pod jazdę.
 
@@ -89,10 +90,26 @@ Stworzyć aplikację Android do bezpiecznego sterowania odtwarzaniem długich pl
 3. [x] Potem wpiąć Android Auto i sterowanie z ekranu samochodu.
 4. [ ] Na końcu dopracować UX, automatyczne wznowienie i pamięć postępu.
 
+## Dual-mode (telefon + Android Auto)
+
+- [ ] ten sam silnik kolejki i historii działa w obu trybach,
+- [ ] tryb telefonu jest podstawową ścieżką konfiguracji konta i playlist,
+- [ ] tryb Android Auto pozostaje uproszczony i bezpieczny podczas jazdy,
+- [ ] regresja Android Auto jest wykonywana po przejściu testów funkcjonalnych na telefonie.
+
 ## Następny krok
 
 Jeśli projekt będzie kontynuowany, kolejnym krokiem powinno być:
-1. [ ] dopracowanie UX Android Auto pod minimalną liczbę interakcji,
-2. [ ] automatyczne wznowienie po połączeniu z autem,
-3. [ ] rozszerzenie testów edge-case dla integracji playback + browse tree,
-4. [ ] przygotowanie checklisty testów na realnym urządzeniu i w Android Auto.
+1. [ ] dopracowanie UX telefonu jako głównej ścieżki testowej,
+2. [ ] dopracowanie UX Android Auto pod minimalną liczbę interakcji,
+3. [x] automatyczne wznowienie po połączeniu z autem,
+4. [ ] rozszerzenie testów edge-case dla integracji playback + browse tree,
+5. [x] przygotowanie checklisty testów na realnym urządzeniu i w Android Auto.
+
+## Checklista testów auto-resume (telefon + Android Auto)
+
+- [ ] Wejście do auta z pauzowanym materiałem (`IN_PROGRESS`) wznawia odtwarzanie bez dotykania telefonu.
+- [ ] Wejście do auta przy pustej kolejce niczego nie uruchamia.
+- [ ] Wejście do auta przy `queueEnded=true` nie wznawia playback.
+- [ ] Gdy odtwarzanie już trwa, ponowne wejście w car mode nie wywołuje podwójnego startu.
+- [ ] Wyjście z car mode nie resetuje pozycji wznowienia i statusów historii.
