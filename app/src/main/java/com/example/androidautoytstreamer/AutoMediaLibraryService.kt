@@ -20,14 +20,16 @@ class AutoMediaLibraryService : MediaLibraryService() {
     private var mediaLibrarySession: MediaLibrarySession? = null
     private val historyStore = PlaylistHistoryStore()
     private var lastNotifiedQueueVersion = -1L
+    private var lastNotifiedPlayback = PlaybackSnapshot()
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingChildrenChanged: Runnable? = null
     private var pendingChildrenCount = 0
     private val queueListener = PlaybackQueueListener { snapshot ->
-        if (snapshot.queueVersion == lastNotifiedQueueVersion) {
+        if (!shouldNotifyBrowseRefresh(snapshot, lastNotifiedQueueVersion, lastNotifiedPlayback)) {
             return@PlaybackQueueListener
         }
         lastNotifiedQueueVersion = snapshot.queueVersion
+        lastNotifiedPlayback = snapshot.playback
         scheduleChildrenChanged(snapshot.queue.size)
     }
 
@@ -213,6 +215,18 @@ class AutoMediaLibraryService : MediaLibraryService() {
         return historyStore.applyToQueue(fallbackQueue)
     }
 
+}
+
+internal fun shouldNotifyBrowseRefresh(
+    snapshot: PlaybackQueueSnapshot,
+    lastQueueVersion: Long,
+    lastPlayback: PlaybackSnapshot
+): Boolean {
+    if (snapshot.queueVersion != lastQueueVersion) return true
+    val current = snapshot.playback
+    return current.currentVideo?.id != lastPlayback.currentVideo?.id ||
+        current.isPlaying != lastPlayback.isPlaying ||
+        current.queueEnded != lastPlayback.queueEnded
 }
 
 internal fun resolveAutoPlayableItem(
