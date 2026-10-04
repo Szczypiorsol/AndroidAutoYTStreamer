@@ -37,5 +37,27 @@ class AutoMediaLibraryResolverTest {
         val video = selectVideoForAutoMediaId("unknown", emptyList(), PlaybackSnapshot())
         assertNull(video)
     }
+
+    @Test
+    fun `resume falls back to first non completed queue item`() {
+        val queue = listOf(
+            PlaylistVideo("done", "Done", status = WatchStatus.COMPLETED),
+            PlaylistVideo("next", "Next", status = WatchStatus.NOT_STARTED)
+        )
+
+        val video = selectVideoForAutoMediaId("queue_resume", queue, PlaybackSnapshot())
+
+        assertNotNull(video)
+        assertEquals("next", video?.id)
+    }
+
+    @Test
+    fun `queue media id does not resolve item outside queue`() {
+        val queue = listOf(PlaylistVideo("abc", "Video ABC", status = WatchStatus.NOT_STARTED))
+
+        val video = selectVideoForAutoMediaId("queue_missing", queue, PlaybackSnapshot())
+
+        assertNull(video)
+    }
 }
 

@@ -8,6 +8,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionResult
 import java.util.concurrent.CopyOnWriteArraySet
 
 data class PlaybackSnapshot(
@@ -42,19 +43,23 @@ class PlaybackService : Service() {
 
             if (newIndex in queue.indices) {
                 currentQueueIndex = newIndex
-                if (queue[newIndex].status == WatchStatus.COMPLETED) {
-                    val nextPlayableIndex = findNextPlayableIndex(newIndex + 1)
-                    if (nextPlayableIndex != null) {
+                val resolvedIndex = resolvePlayableIndexForNavigation(
+                    queue = queue,
+                    targetIndex = newIndex,
+                    previousIndex = lastKnownQueueIndex
+                )
+                if (resolvedIndex == null) {
+                    endQueuePlayback()
+                } else {
+                    if (resolvedIndex != newIndex) {
                         queueEnded = false
-                        currentQueueIndex = nextPlayableIndex
-                        localPlayer.seekToDefaultPosition(nextPlayableIndex)
+                        currentQueueIndex = resolvedIndex
+                        localPlayer.seekToDefaultPosition(resolvedIndex)
                         localPlayer.play()
                     } else {
-                        endQueuePlayback()
+                        queueEnded = false
+                        markCurrentStarted()
                     }
-                } else {
-                    queueEnded = false
-                    markCurrentStarted()
                 }
             }
 
@@ -72,6 +77,20 @@ class PlaybackService : Service() {
         }
     }
 
+    private val mediaSessionCallback = object : MediaSession.Callback {
+        override fun onPlayerCommandRequest(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            playerCommand: Int
+        ): Int {
+            return if (isPlayerCommandAllowed(queueEnded, playerCommand)) {
+                SessionResult.RESULT_SUCCESS
+            } else {
+                SessionResult.RESULT_ERROR_INVALID_STATE
+            }
+        }
+    }
+
     inner class LocalBinder : Binder() {
         fun getService(): PlaybackService = this@PlaybackService
         fun getPlayer(): ExoPlayer? = player
@@ -82,7 +101,9 @@ class PlaybackService : Service() {
         PlaylistHistoryStore.initialize(filesDir)
         player = ExoPlayer.Builder(this).build()
         player?.addListener(playerListener)
-        mediaSession = MediaSession.Builder(this, player!!).build()
+        mediaSession = MediaSession.Builder(this, player!!)
+            .setCallback(mediaSessionCallback)
+            .build()
     }
 
     override fun onDestroy() {
@@ -272,3 +293,44 @@ class PlaybackService : Service() {
         return null
     }
 }
+
+internal fun isPlayerCommandAllowed(queueEnded: Boolean, playerCommand: Int): Boolean {
+    if (!queueEnded) return true
+    return playerCommand != Player.COMMAND_PLAY_PAUSE
+}
+
+internal fun resolvePlayableIndexForNavigation(
+    queue: List<PlaylistVideo>,
+    targetIndex: Int,
+    previousIndex: Int
+): Int? {
+    if (targetIndex !in queue.indices) return null
+    if (queue[targetIndex].status != WatchStatus.COMPLETED) return targetIndex
+
+    val movedBackward = previousIndex in queue.indices && targetIndex < previousIndex
+    val preferred = if (movedBackward) {
+        findPlayableIndexBackward(queue, targetIndex - 1)
+            ?: findPlayableIndexForward(queue, targetIndex + 1)
+    } else {
+        findPlayableIndexForward(queue, targetIndex + 1)
+            ?: findPlayableIndexBackward(queue, targetIndex - 1)
+    }
+    return preferred
+}
+
+private fun findPlayableIndexForward(queue: List<PlaylistVideo>, fromIndex: Int): Int? {
+    if (queue.isEmpty()) return null
+    for (index in fromIndex until queue.size) {
+        if (index in queue.indices && queue[index].status != WatchStatus.COMPLETED) return index
+    }
+    return null
+}
+
+private fun findPlayableIndexBackward(queue: List<PlaylistVideo>, fromIndex: Int): Int? {
+    if (queue.isEmpty()) return null
+    for (index in fromIndex downTo 0) {
+        if (index in queue.indices && queue[index].status != WatchStatus.COMPLETED) return index
+    }
+    return null
+}
+
