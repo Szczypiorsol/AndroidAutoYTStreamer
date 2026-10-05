@@ -11,6 +11,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionResult
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,7 @@ class PlaybackService : Service() {
     private var queueEnded = false
     private val playbackListeners = CopyOnWriteArraySet<PlaybackStateListener>()
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val resolvingIds = ConcurrentHashMap.newKeySet<String>()
 
     private val playerListener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
@@ -301,43 +303,50 @@ class PlaybackService : Service() {
         if (index !in queue.indices) return
         val video = queue[index]
 
+        if (resolvingIds.contains(video.id)) return
+        resolvingIds.add(video.id)
+
         serviceScope.launch {
-            val result = YouTubeStreamResolver.resolveAudioStreamUrl(video.id)
-            val streamUrl = result.getOrNull()
-            val localPlayer = player ?: return@launch
+            try {
+                val result = YouTubeStreamResolver.resolveAudioStreamUrl(video.id)
+                val streamUrl = result.getOrNull()
+                val localPlayer = player ?: return@launch
 
-            if (!streamUrl.isNullOrBlank() && index in queue.indices && index < localPlayer.mediaItemCount) {
-                val currentItem = localPlayer.getMediaItemAt(index)
-                val currentUri = currentItem.localConfiguration?.uri?.toString()
+                if (!streamUrl.isNullOrBlank() && index in queue.indices && index < localPlayer.mediaItemCount) {
+                    val currentItem = localPlayer.getMediaItemAt(index)
+                    val currentUri = currentItem.localConfiguration?.uri?.toString()
 
-                if (currentUri != streamUrl) {
-                    AppLog.d("PlaybackService: Resolved direct stream URL for index $index (id=${video.id})")
-                    val updatedMediaItem = MediaItem.Builder()
-                        .setMediaId(video.id)
-                        .setUri(streamUrl)
-                        .setMediaMetadata(
-                            MediaMetadata.Builder()
-                                .setTitle(video.title)
-                                .build()
-                        )
-                        .setTag(video.id)
-                        .build()
+                    if (currentUri != streamUrl) {
+                        AppLog.d("PlaybackService: Resolved direct stream URL for index $index (id=${video.id})")
+                        val updatedMediaItem = MediaItem.Builder()
+                            .setMediaId(video.id)
+                            .setUri(streamUrl)
+                            .setMediaMetadata(
+                                MediaMetadata.Builder()
+                                    .setTitle(video.title)
+                                    .build()
+                            )
+                            .setTag(video.id)
+                            .build()
 
-                    val isPlayingThisIndex = localPlayer.currentMediaItemIndex == index
-                    val currentPos = localPlayer.currentPosition
-                    localPlayer.replaceMediaItem(index, updatedMediaItem)
+                        val isPlayingThisIndex = localPlayer.currentMediaItemIndex == index
+                        val currentPos = localPlayer.currentPosition
+                        localPlayer.replaceMediaItem(index, updatedMediaItem)
 
-                    if (isPlayingThisIndex) {
-                        localPlayer.seekTo(index, currentPos)
-                        localPlayer.prepare()
-                        localPlayer.play()
+                        if (isPlayingThisIndex) {
+                            localPlayer.seekTo(index, currentPos)
+                            localPlayer.prepare()
+                            localPlayer.play()
+                        }
                     }
                 }
-            }
 
-            if (index + 1 in queue.indices) {
-                val nextVideo = queue[index + 1]
-                YouTubeStreamResolver.resolveAudioStreamUrl(nextVideo.id)
+                if (index + 1 in queue.indices) {
+                    val nextVideo = queue[index + 1]
+                    YouTubeStreamResolver.resolveAudioStreamUrl(nextVideo.id)
+                }
+            } finally {
+                resolvingIds.remove(video.id)
             }
         }
     }
