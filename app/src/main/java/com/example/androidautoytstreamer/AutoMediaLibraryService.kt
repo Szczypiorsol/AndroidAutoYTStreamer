@@ -14,6 +14,7 @@ import androidx.media3.session.MediaSession.ControllerInfo
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import kotlinx.coroutines.runBlocking
 
 class AutoMediaLibraryService : MediaLibraryService() {
     private var player: ExoPlayer? = null
@@ -248,9 +249,15 @@ internal fun resolveAutoPlayableItem(
 ): MediaItem? {
     val selectedVideo = selectVideoForAutoMediaId(mediaId, queue, playback) ?: return null
 
+    val directUrl = runCatching {
+        runBlocking {
+            YouTubeStreamResolver.resolveAudioStreamUrl(selectedVideo.id).getOrNull()
+        }
+    }.getOrNull() ?: "https://www.youtube.com/watch?v=${selectedVideo.id}"
+
     return MediaItem.Builder()
         .setMediaId(selectedVideo.id)
-        .setUri("https://www.youtube.com/watch?v=${selectedVideo.id}")
+        .setUri(directUrl)
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(selectedVideo.title)

@@ -5,12 +5,18 @@ import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionResult
 import java.util.concurrent.CopyOnWriteArraySet
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 data class PlaybackSnapshot(
     val currentVideo: PlaylistVideo? = null,
@@ -32,6 +38,7 @@ class PlaybackService : Service() {
     private var lastKnownQueueIndex = -1
     private var queueEnded = false
     private val playbackListeners = CopyOnWriteArraySet<PlaybackStateListener>()
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val playerListener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
@@ -77,6 +84,7 @@ class PlaybackService : Service() {
                         queueEnded = false
                         markCurrentStarted()
                     }
+                    ensureMediaItemResolved(currentQueueIndex)
                 }
             }
 
@@ -130,6 +138,7 @@ class PlaybackService : Service() {
 
     override fun onDestroy() {
         AppLog.d("PlaybackService.onDestroy")
+        serviceScope.cancel()
         saveCurrentProgress()
         player?.removeListener(playerListener)
         mediaSession?.release()
@@ -170,27 +179,33 @@ class PlaybackService : Service() {
         lastKnownQueueIndex = preferredIndex
         AppLog.d("PlaybackService.setQueue: count=${queue.size}, preferredIndex=$preferredIndex (${queue[preferredIndex].title})")
 
-        val mediaItems = queue.map { video ->
+        val initialMediaItems = queue.map { video ->
             MediaItem.Builder()
                 .setMediaId(video.id)
                 .setUri("https://www.youtube.com/watch?v=${video.id}")
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(video.title)
+                        .build()
+                )
                 .setTag(video.id)
                 .build()
         }
 
-        player?.setMediaItems(mediaItems, false)
-        player?.prepare()
+        player?.setMediaItems(initialMediaItems, false)
         player?.seekTo(preferredIndex, (queue[preferredIndex].resumeAtSeconds * 1000L).coerceAtLeast(0L))
         player?.playWhenReady = true
-        player?.play()
         markCurrentStarted()
         notifyPlaybackState()
+
+        ensureMediaItemResolved(preferredIndex)
     }
 
     fun playCurrent() {
         AppLog.d("PlaybackService.playCurrent: index=$currentQueueIndex video=${currentVideo()?.title}")
         if (player?.mediaItemCount == 0) return
         if (queueEnded) return
+        ensureMediaItemResolved(currentQueueIndex)
         player?.play()
     }
 
@@ -205,6 +220,7 @@ class PlaybackService : Service() {
         AppLog.d("PlaybackService.resume: index=$currentQueueIndex video=${currentVideo()?.title}")
         if (player?.mediaItemCount == 0) return
         if (queueEnded) return
+        ensureMediaItemResolved(currentQueueIndex)
         player?.play()
         notifyPlaybackState()
     }
@@ -222,9 +238,10 @@ class PlaybackService : Service() {
         currentQueueIndex = nextIndex
         lastKnownQueueIndex = nextIndex
         player?.seekToDefaultPosition(nextIndex)
-        player?.play()
         markCurrentStarted()
         notifyPlaybackState()
+        ensureMediaItemResolved(nextIndex)
+        player?.play()
         return queue[nextIndex]
     }
 
@@ -240,9 +257,10 @@ class PlaybackService : Service() {
         currentQueueIndex = previousIndex
         lastKnownQueueIndex = previousIndex
         player?.seekToDefaultPosition(previousIndex)
-        player?.play()
         markCurrentStarted()
         notifyPlaybackState()
+        ensureMediaItemResolved(previousIndex)
+        player?.play()
         return queue[previousIndex]
     }
 
@@ -277,6 +295,51 @@ class PlaybackService : Service() {
 
     fun markCurrentCompleted() {
         markCompletedAt(currentQueueIndex)
+    }
+
+    private fun ensureMediaItemResolved(index: Int) {
+        if (index !in queue.indices) return
+        val video = queue[index]
+
+        serviceScope.launch {
+            val result = YouTubeStreamResolver.resolveAudioStreamUrl(video.id)
+            val streamUrl = result.getOrNull()
+            val localPlayer = player ?: return@launch
+
+            if (!streamUrl.isNullOrBlank() && index in queue.indices && index < localPlayer.mediaItemCount) {
+                val currentItem = localPlayer.getMediaItemAt(index)
+                val currentUri = currentItem.localConfiguration?.uri?.toString()
+
+                if (currentUri != streamUrl) {
+                    AppLog.d("PlaybackService: Resolved direct stream URL for index $index (id=${video.id})")
+                    val updatedMediaItem = MediaItem.Builder()
+                        .setMediaId(video.id)
+                        .setUri(streamUrl)
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setTitle(video.title)
+                                .build()
+                        )
+                        .setTag(video.id)
+                        .build()
+
+                    val isPlayingThisIndex = localPlayer.currentMediaItemIndex == index
+                    val currentPos = localPlayer.currentPosition
+                    localPlayer.replaceMediaItem(index, updatedMediaItem)
+
+                    if (isPlayingThisIndex) {
+                        localPlayer.seekTo(index, currentPos)
+                        localPlayer.prepare()
+                        localPlayer.play()
+                    }
+                }
+            }
+
+            if (index + 1 in queue.indices) {
+                val nextVideo = queue[index + 1]
+                YouTubeStreamResolver.resolveAudioStreamUrl(nextVideo.id)
+            }
+        }
     }
 
     private fun saveCurrentProgress() {
